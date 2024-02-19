@@ -16,3 +16,7 @@ except:
 # an exception block for some reason...
 if len(message) > 0:
     raise SystemExit(message)
+
+from .config import oa_config, Config, logger
+
+__all__ = [oa_config, Config, logger]
