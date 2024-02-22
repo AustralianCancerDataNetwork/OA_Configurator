@@ -106,14 +106,15 @@ class Config(object):
             except yaml.YAMLError as exc: 
                 raise exc
     
-    def get_cnx_str(self, db, pwd=''):
+    def get_cnx_str(self, user='admin', pwd=''):
         # returns raw connection string for database depending on 
         # configuration yaml and secret password stored in keyring 
+        db = self.db['schema']
         if pwd == '':
-            pwd = self.get_db_pwd()
+            user, pwd = self.get_db_creds()
         db_config = {'database': db,
                     'drivername': self.db['platform'],
-                    'username': self.db['db_uid_env'],
+                    'username': user,
                     'password': pwd,
                     'host': self.db['host'],
                     'port': self.db['port'],
@@ -126,21 +127,27 @@ class Config(object):
             cnx_str = URL(**db_config)
         return cnx_str
 
-    def get_db_pwd(self):
+    def get_db_creds(self):
+        user, pwd = '', ''
         try:
             with open(self.config_path / 'pwd_override.txt', 'r') as infile:
                 pwd = infile.read()
+                user = self.db['db_uid_env']
         # retrieves database password from keyring according to parameters in configuration yaml
         except:
             try:
-                service = self.db['db_pid_env']
-                user = self.db['db_uid_env']
-                pwd = keyring.get_password(service, user)
+                if self.db['pass_store_type'] == 'keyring':
+                    service = self.db['db_pid_env']
+                    user = self.db['db_uid_env']
+                    pwd = keyring.get_password(service, user)
+                else:
+                    pwd = self.db['db_pid_env']
                 if not pwd:
                     logging.warning(f'empty host password for user: {user}')
-                return pwd
             except Exception as e:
                 logging.error(f'{str(e)}')
+        return (user, pwd)
+
 
 
     def get_engine(self, db, echo=False, pwd_override=''):
@@ -148,7 +155,7 @@ class Config(object):
         # to configuration yaml
         if self._engine:
             return self._engine
-        cnx_str = self.get_cnx_str(db, pwd=pwd_override)
+        cnx_str = self.get_cnx_str(pwd=pwd_override)
         try:
             cnx_args = {} if self.db['platform'] == 'sqlite' else {'connect_timeout': 10}
             self._engine = sa.create_engine(cnx_str, echo=echo, connect_args=cnx_args)

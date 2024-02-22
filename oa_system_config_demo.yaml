@@ -17,6 +17,7 @@ private_key:
 keyring:
   backend: sagecipher.keyring.Keyring
 db:
+  pass_store_type: local # choose either local or keyring - if keyring, will search keystore using db_pid_env etc. as labels, else use raw (recommended only for local instances)
   db_pid_env: source_db_pid # db credential password label as stored in keyring
   db_uid_env: source # db credential user label as stored in keyring
   host: 127.0.0.1
