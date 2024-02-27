@@ -113,12 +113,12 @@ class Config(object):
         if pwd == '':
             user, pwd = self.get_db_creds()
         db_config = {'database': db,
-                    'drivername': self.db['platform'],
-                    'username': user,
-                    'password': pwd,
-                    'host': self.db['host'],
-                    'port': self.db['port'],
-                    'query': {}
+                     'drivername': self.db['platform'],
+                     'username': user,
+                     'password': pwd,
+                     'host': self.db['host'],
+                     'port': self.db['port'],
+                     'query': {}
                     }
         local_data_path = self.data_path / self.filesystem.local_db
         if self.db['platform'] == 'sqlite':
@@ -136,9 +136,9 @@ class Config(object):
         # retrieves database password from keyring according to parameters in configuration yaml
         except:
             try:
+                user = self.db['db_uid_env']
                 if self.db['pass_store_type'] == 'keyring':
                     service = self.db['db_pid_env']
-                    user = self.db['db_uid_env']
                     pwd = keyring.get_password(service, user)
                 else:
                     pwd = self.db['db_pid_env']
