@@ -2,21 +2,25 @@
 # oa_system_config_demo.yaml to see what items need to be setup in your local environment
 
 from dotenv import load_dotenv
-import os, sys
+import os
 from nbconvert.preprocessors import CellExecutionError
+from IPython import get_ipython
 
 load_dotenv()
 
-message = ""
 try:
     os.environ['OA_CONFIG']
-except:
+except Exception as e:
     message = 'Please set OA_CONFIG environment variable to allow loading of db configuration details'
-    t, v, tb = sys.exc_info() # store tuple of exception type, value, and trackback object memory address
-    raise CellExecutionError(None, v, message)
-    # raise custom exception to replace the original exception type KeyError
-    # this error type deal with failures on jupyter notebook execution
-    # by halting cell execution without causing kernel crash
+    shell = get_ipython().__class__.__name__
+    if shell == 'ZMQInteractiveShell':
+    # check if execution was done on Jupyter notebook or terminal
+        raise CellExecutionError(None, e.args[0], message)
+        # raise custom exception to replace the original exception type KeyError
+        # this error type deal with failures on jupyter notebook execution
+        # by halting cell execution without causing kernel crash
+    else:
+        raise SystemExit(message)
 
 from .config import oa_config, Config, logger
 
