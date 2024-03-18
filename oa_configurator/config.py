@@ -112,6 +112,8 @@ class Config(object):
         db = self.db['schema']
         if pwd == '':
             user, pwd = self.get_db_creds()
+        else:
+            user = self.db['db_uid_env'] 
         db_config = {'database': db,
                      'drivername': self.db['platform'],
                      'username': user,
