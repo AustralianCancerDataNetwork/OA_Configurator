@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from collections.abc import Iterator
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.engine import URL, Engine
 import sqlalchemy as sa
 
@@ -64,6 +66,29 @@ class ConnectionConfig(BaseModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def _check_required_fields(self) -> ConnectionConfig:
+        """Enforce host/database_name requiredness at construction time.
+
+        Mirrors _build_url_obj()'s own checks, which stay in place as
+        defense-in-depth: neither model_copy(update=...) nor direct
+        attribute mutation re-runs this validator on a non-frozen model
+        with no validate_assignment.
+        """
+        if self.dialect.startswith("sqlite"):
+            if not self.database_name:
+                raise ValueError(
+                    "ConnectionConfig has no `database_name` set for a sqlite dialect and no"
+                    " longer defaults to ':memory:'. Set `database_name` explicitly, passing"
+                    " ':memory:' if that's actually what you want."
+                )
+        elif not self.host:
+            raise ValueError(
+                "ConnectionConfig has no `host` set and no longer defaults to 'localhost'."
+                " Set `host` explicitly in config.toml."
+            )
+        return self
+
     def to_env_pairs(self, prefix: str) -> list[str]:
         """Return ``PREFIX_FIELD=value`` strings for each non-None field.
 
@@ -81,6 +106,8 @@ class ConnectionConfig(BaseModel):
         ]
 
     def _build_url_obj(self) -> URL:
+        # Also enforced at construction time by _check_required_fields; kept
+        # here as defense-in-depth for a post-construction mutated instance.
         if self.dialect.startswith("sqlite"):
             if not self.database_name:
                 raise ValueError(
@@ -139,6 +166,44 @@ class ConnectionConfig(BaseModel):
             test_only=self.test_only,
         )
 
+    @property
+    def dialect_name(self) -> str:
+        """SQLAlchemy dialect name (e.g. "postgresql", "sqlite"), derived from
+        ``dialect`` alone. Unlike :attr:`ResolvedConnection.dialect_name`, this
+        needs no other field set (``host``, ``database_name``, etc.), so it is
+        safe to call before the connection is otherwise complete.
+        """
+        return URL.create(drivername=self.dialect).get_backend_name()
+
+
+def _iter_schema_roles(cls: type[BaseModel]) -> Iterator[tuple[str, Role]]:
+    """Yield (field_name, Role) for every Role-tagged field on cls.
+
+    Mirrors refs._iter_refs's shape: a field's Role tag lives in its
+    FieldInfo.metadata, populated from an Annotated[..., Role.X] extra.
+    """
+    for name, info in cls.model_fields.items():
+        roles = [m for m in info.metadata if isinstance(m, Role)]
+        assert len(roles) <= 1, f"{cls.__name__}.{name} has more than one Role marker"
+        if roles:
+            yield name, roles[0]
+
+
+def schema_for_role(instance: BaseModel, role: Role) -> str | None:
+    """Effective config-time schema value for role on instance.
+
+    The role's own Role-tagged field if explicitly set, else the field
+    tagged Role.PRIMARY. Operates on a pre-resolve config model (e.g.
+    CDMDatabaseConfig); ResolvedDatabase/ResolvedCDMDatabase have their own
+    schema_for_role method for the equivalent post-resolve lookup.
+    """
+    field_by_role = {r: name for name, r in _iter_schema_roles(type(instance))}
+    if role in field_by_role:
+        value = getattr(instance, field_by_role[role])
+        if value is not None:
+            return value
+    return getattr(instance, field_by_role[Role.PRIMARY])
+
 
 class DatabaseKind(str, Enum):
     """Discriminator for :class:`DatabaseConfig` subclasses."""
@@ -164,13 +229,21 @@ class DatabaseConfig(BaseModel):
     connection: Annotated[str, RefTo(ConnectionConfig)] = Field(
         description="Name of the connection entry (from [connections]) used as the primary server."
     )
-    schema_name: str | None = Field(
+    schema_name: Annotated[str | None, Role.PRIMARY] = Field(
         default=None,
         description=(
             "Schema this database's tables live in. None means no override, use the "
             "connection's own default/search_path."
         ),
     )
+
+    def connection_name_for_role(self, role: Role) -> str:
+        """Name of the connection entry to use for role.
+
+        Always self.connection here; overridden by CDMDatabaseConfig, whose
+        vocab role may route to a separate connection.
+        """
+        return self.connection
 
     def resolve(self, name: str, stack: StackConfig) -> ResolvedDatabase:
         """Resolve this database to a concrete connection and effective schema.
@@ -209,29 +282,44 @@ class CDMDatabaseConfig(DatabaseConfig):
     """
 
     kind: Literal[DatabaseKind.CDM] = DatabaseKind.CDM  # type: ignore[assignment]
-    schema_name: str = Field(
-        default="omop",
-        description="Schema where CDM clinical tables live.",
+    schema_name: Annotated[str | None, Role.PRIMARY] = Field(
+        default=None,
+        description="Schema where CDM clinical tables live. None means no override, use the connection's own default/search_path.",
     )
     vocab_connection: Annotated[str | None, RefTo(ConnectionConfig)] = Field(
         default=None,
         description="Name of the connection entry for vocabulary tables. Falls back to connection when not set.",
     )
-    vocab_schema: str | None = Field(
+    vocab_schema: Annotated[str | None, Role.VOCAB] = Field(
         default=None,
         description="Vocabulary schema. Falls back to schema_name when not set.",
     )
-    results_schema: str | None = Field(
+    results_schema: Annotated[str | None, Role.RESULTS] = Field(
         default=None,
         description="Achilles / Atlas results schema. Falls back to schema_name when not set.",
     )
+
+    def connection_name_for_role(self, role: Role) -> str:
+        """Name of the connection entry to use for role.
+
+        vocab_connection for Role.VOCAB when explicitly configured, else
+        the primary connection -- the same branch Role.RESULTS and an
+        unconfigured Role.VOCAB both take.
+        """
+        if role is Role.VOCAB and self.vocab_connection is not None:
+            return self.vocab_connection
+        return self.connection
 
     def resolve(self, name: str, stack: StackConfig) -> ResolvedCDMDatabase:
         """Resolve this database to concrete connections and effective schema names.
 
         The vocab connection falls back to the primary connection when not
         explicitly configured; the vocab schema falls back to the CDM
-        schema under the same condition. *stack* must already have passed
+        schema under the same condition. ``vocab_schema``/``results_schema``
+        resolve to ``None`` when their own connection's dialect has no real
+        multi-schema concept (e.g. SQLite), rather than carrying a
+        dialect-inappropriate string that a later fold would need to
+        correct. *stack* must already have passed
         :meth:`StackConfig.validate_references`, so ``self.connection``/
         ``self.vocab_connection`` are guaranteed to exist in
         ``stack.connections``.
@@ -243,19 +331,23 @@ class CDMDatabaseConfig(DatabaseConfig):
             collides with a schema reserved for internal bookkeeping (see
             :func:`~.sql.register_reserved_schema`).
         """
-        effective_vocab_schema = self.vocab_schema or self.schema_name
-        effective_results_schema = self.results_schema or self.schema_name
+        effective_vocab_schema = schema_for_role(self, Role.VOCAB)
+        effective_results_schema = schema_for_role(self, Role.RESULTS)
         reject_reserved_schema(self.schema_name)
         reject_reserved_schema(effective_vocab_schema)
         reject_reserved_schema(effective_results_schema)
-        primary_connection_name = self.connection
+        primary_connection_name = self.connection_name_for_role(Role.PRIMARY)
         primary_connection = stack.connections[primary_connection_name].resolve(primary_connection_name)
-        vocab_connection_name = self.vocab_connection or primary_connection_name
+        vocab_connection_name = self.connection_name_for_role(Role.VOCAB)
         vocab_connection = (
             primary_connection
             if vocab_connection_name == primary_connection_name
             else stack.connections[vocab_connection_name].resolve(vocab_connection_name)
         )
+        if not supports_schemas(vocab_connection.dialect_name):
+            effective_vocab_schema = None
+        if not supports_schemas(primary_connection.dialect_name):
+            effective_results_schema = None
         return ResolvedCDMDatabase(
             name=name,
             connection=primary_connection,
@@ -455,17 +547,20 @@ class ResolvedCDMDatabase(ResolvedDatabase):
     vocab_connection : ResolvedConnection
         Resolved vocabulary connection for this database. May be the same as
         *connection* if no separate vocab connection is configured.
-    vocab_schema : str
-        Effective vocabulary schema name for this database. May be the same as
-        schema_name if no separate vocab schema is configured.
-    results_schema : str
+    vocab_schema : str or None
+        Effective vocabulary schema name for this database. May be the same
+        as schema_name if no separate vocab schema is configured; None when
+        vocab_connection's dialect has no real multi-schema concept (e.g.
+        SQLite).
+    results_schema : str or None
         Effective results schema name for this database. May be the same as
-        schema_name if no separate results schema is configured.
+        schema_name if no separate results schema is configured; None when
+        connection's dialect has no real multi-schema concept (e.g. SQLite).
     """
 
     vocab_connection: ResolvedConnection
-    vocab_schema: str
-    results_schema: str
+    vocab_schema: str | None
+    results_schema: str | None
 
     def connection_target(self, role: Role = Role.PRIMARY) -> ResolvedConnection:
         """Return the resolved connection for a given role.

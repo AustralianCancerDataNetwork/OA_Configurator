@@ -123,7 +123,7 @@ class TestWriteEnvFile:
                 "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
             },
             databases={
-                "default": CDMDatabaseConfig(connection="db", schema_name="omop")
+                "default": CDMDatabaseConfig(connection="db")
             },
             tools={"my_pkg": {"foo": "bar", "count": 3}},
         )
@@ -153,7 +153,7 @@ class TestSaveStackConfig:
                 "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
             },
             databases={
-                "default": CDMDatabaseConfig(connection="db", schema_name="omop")
+                "default": CDMDatabaseConfig(connection="db")
             },
         )
         out = tmp_path / "config.toml"
@@ -209,9 +209,9 @@ class TestSaveStackConfig:
 
     def test_none_values_stripped(self, tmp_path):
         cfg = StackConfig.for_session(
-            connections={"db": ConnectionConfig(dialect="sqlite")},
+            connections={"db": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
             databases={
-                "default": CDMDatabaseConfig(connection="db", schema_name="omop")
+                "default": CDMDatabaseConfig(connection="db")
             },
         )
         out = tmp_path / "config.toml"

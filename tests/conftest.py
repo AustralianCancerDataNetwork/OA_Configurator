@@ -97,7 +97,7 @@ def minimal_stack() -> StackConfig:
             )
         },
         databases={
-            "default": CDMDatabaseConfig(connection="db", schema_name="omop"),
+            "default": CDMDatabaseConfig(connection="db"),
         },
     )
 

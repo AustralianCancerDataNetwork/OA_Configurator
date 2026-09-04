@@ -269,8 +269,9 @@ class TestPlanConfigure:
             {
                 "cdm_db": {
                     "connection": {
-                        "dialect": "sqlite",
-                        "database_name": ":memory:",
+                        "dialect": "postgresql+psycopg",
+                        "host": "localhost",
+                        "database_name": "cdm",
                     },
                     "schema_name": "planned_omop",
                 }
@@ -286,7 +287,15 @@ class TestPlanConfigure:
         assert cfg.tools == {}
 
     def test_nested_refto_update_carries_over_unmentioned_target_fields(self):
-        cfg = _validated_stack({"cdm_db": "cdm_db"})
+        cfg = StackConfig.for_session(
+            connections={
+                "db": ConnectionConfig(
+                    dialect="postgresql+psycopg", host="localhost", database_name="db"
+                )
+            },
+            databases={"cdm_db": CDMDatabaseConfig(connection="db")},
+            tools={"validated_tool": {"cdm_db": "cdm_db"}},
+        )
         cfg.databases["cdm_db"].schema_name = "original_schema"
 
         planned = plan_configure(

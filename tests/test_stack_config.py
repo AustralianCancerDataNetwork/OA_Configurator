@@ -28,9 +28,8 @@ class TestConnectionConfig:
         """No implicit ':memory:' fallback: an unset database_name for a
         sqlite dialect would otherwise silently discard data on every
         restart, with no indication anything was ever in-memory."""
-        db = ConnectionConfig(dialect="sqlite")
         with pytest.raises(ValueError, match="database_name"):
-            db.build_url()
+            ConnectionConfig(dialect="sqlite")
 
     def test_pg_build_url_includes_password(self):
         db = ConnectionConfig(
@@ -90,9 +89,9 @@ class TestCDMDatabaseConfig:
         assert r.vocab_schema is None
         assert r.results_schema is None
 
-    def test_schema_name_defaults_to_omop(self):
+    def test_schema_name_defaults_to_none(self):
         r = CDMDatabaseConfig(connection="db")
-        assert r.schema_name == "omop"
+        assert r.schema_name is None
 
     def test_extra_fields_forbidden(self):
         with pytest.raises(Exception):
@@ -103,13 +102,13 @@ class TestDatabaseKindDiscrimination:
     def test_missing_kind_rejected(self):
         with pytest.raises(Exception, match="kind"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite")},
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
                 databases={"r": {"connection": "c"}},  # ty: ignore[invalid-argument-type]
             )
 
     def test_raw_dict_dispatches_by_kind(self):
         cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite")},
+            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
             databases=cast(
                 Any,
                 {
@@ -124,7 +123,7 @@ class TestDatabaseKindDiscrimination:
     def test_unknown_kind_rejected(self):
         with pytest.raises(Exception):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite")},
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
                 databases={"r": {"kind": "bogus", "connection": "c"}},  # ty: ignore[invalid-argument-type]
             )
 
@@ -136,7 +135,7 @@ class TestMismatchedKindRefs:
 
     def test_flags_wrong_subtype(self):
         cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite")},
+            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
             databases={"g": GenericDatabaseConfig(connection="c")},
         )
         from oa_configurator.domains.vector_stores.schema import VectorStoreConfig
@@ -145,7 +144,7 @@ class TestMismatchedKindRefs:
         assert mismatched_kind_refs(vs, cfg) == []
 
         cfg2 = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite")},
+            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
             databases={"d": CDMDatabaseConfig(connection="c")},
         )
         vs2 = VectorStoreConfig(backend_type="pgvector", database="d")
@@ -175,7 +174,7 @@ class TestStackConfig:
             connections={
                 "c": ConnectionConfig(dialect="sqlite", database_name=":memory:")
             },
-            databases={"r": {"connection": "c", "kind": "cdm", "schema_name": "s"}},  # ty: ignore[invalid-argument-type]
+            databases={"r": {"connection": "c", "kind": "cdm"}},  # ty: ignore[invalid-argument-type]
         )
         assert isinstance(cfg.connections["c"], ConnectionConfig)
         assert isinstance(cfg.databases["r"], DatabaseConfig)
@@ -192,11 +191,9 @@ class TestStackConfig:
     def test_cross_ref_validation_vocab_connection(self):
         with pytest.raises(ValueError, match="unknown connection"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite")},
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
                 databases={
-                    "r": CDMDatabaseConfig(
-                        connection="c", vocab_connection="missing", schema_name="s"
-                    )
+                    "r": CDMDatabaseConfig(connection="c", vocab_connection="missing")
                 },
             )
 

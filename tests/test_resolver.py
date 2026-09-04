@@ -93,12 +93,14 @@ class TestResolveDatabase:
         assert isinstance(res, ResolvedCDMDatabase)
         assert isinstance(res, ResolvedDatabase)
         assert res.connection.name == "db"
-        assert res.schema_name == "omop"
+        assert res.schema_name is None
 
     def test_generic_database_has_no_vocab_role(self):
         cfg = StackConfig.for_session(
             connections={
-                "c": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "c": ConnectionConfig(
+                    dialect="postgresql+psycopg", host="localhost", database_name="c"
+                )
             },
             databases={
                 "default": GenericDatabaseConfig(connection="c", schema_name="public")
@@ -123,9 +125,7 @@ class TestResolveDatabase:
                 "vocab": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
             },
             databases={
-                "default": CDMDatabaseConfig(
-                    connection="cdm", vocab_connection="vocab", schema_name="omop"
-                ),
+                "default": CDMDatabaseConfig(connection="cdm", vocab_connection="vocab"),
             },
         )
         r = Resolver(cfg)
@@ -133,11 +133,21 @@ class TestResolveDatabase:
         assert isinstance(res, ResolvedCDMDatabase)
         assert res.vocab_connection.name == "vocab"
 
-    def test_vocab_schema_falls_back_to_cdm_schema(self, minimal_stack):
-        r = Resolver(minimal_stack)
+    def test_vocab_schema_falls_back_to_cdm_schema(self, pg_stack_defaults):
+        r = Resolver(pg_stack_defaults)
         res = r.resolve_database("default")
         assert isinstance(res, ResolvedCDMDatabase)
         assert res.vocab_schema == "omop"
+
+    def test_vocab_schema_and_results_schema_fold_to_none_on_sqlite(self, minimal_stack):
+        """SQLite has no schema concept: even the fallback-to-CDM-schema
+        value resolves to None here, not the literal "omop" string that
+        would only be valid on a dialect with real schema support."""
+        r = Resolver(minimal_stack)
+        res = r.resolve_database("default")
+        assert isinstance(res, ResolvedCDMDatabase)
+        assert res.vocab_schema is None
+        assert res.results_schema is None
 
     def test_explicit_vocab_schema(self, pg_stack):
         r = Resolver(pg_stack)
@@ -293,7 +303,9 @@ class TestResolveVectorStore:
     def test_database_backed(self):
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(
+                    dialect="postgresql+psycopg", host="localhost", database_name="db"
+                )
             },
             databases={
                 "default": GenericDatabaseConfig(connection="db", schema_name="public")
@@ -404,7 +416,7 @@ class TestResolveVectorStore:
         cfg_databases = {"cdm_db": CDMDatabaseConfig(connection="c")}
         with pytest.raises(ValueError, match="GenericDatabaseConfig"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite")},
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
                 databases=cfg_databases,
                 vector_stores={
                     "vs": VectorStoreConfig(backend_type="pgvector", database="cdm_db")
@@ -478,10 +490,8 @@ class TestSchemaTranslateMap:
 class TestResolveTool:
     def test_tool_extra_dict(self):
         cfg = StackConfig.for_session(
-            connections={"db": ConnectionConfig(dialect="sqlite")},
-            databases={
-                "default": CDMDatabaseConfig(connection="db", schema_name="omop")
-            },
+            connections={"db": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+            databases={"default": CDMDatabaseConfig(connection="db")},
             tools={"omop_emb": {"backend": "sqlitevec", "path": "/data"}},
         )
         r = Resolver(cfg)
@@ -523,51 +533,60 @@ class TestReservedSchemaCollision:
 
     def test_generic_database_resolve_raises_on_reserved_schema_name(self):
         reserved = self._reserved_name()
-        cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
-            databases={"default": GenericDatabaseConfig(connection="c", schema_name=reserved)},
-        )
-        with pytest.raises(RuntimeError, match=f"{reserved!r}.*test-owner"):
-            Resolver(cfg).resolve_database("default")
+        with pytest.raises(ValidationError, match=f"{reserved!r}.*test-owner"):
+            StackConfig.for_session(
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                databases={"default": GenericDatabaseConfig(connection="c", schema_name=reserved)},
+            )
 
     def test_cdm_database_resolve_raises_on_reserved_schema_name(self):
         reserved = self._reserved_name()
-        cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
-            databases={"default": CDMDatabaseConfig(connection="c", schema_name=reserved)},
+        with pytest.raises(ValidationError, match=f"{reserved!r}.*test-owner"):
+            StackConfig.for_session(
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                databases={"default": CDMDatabaseConfig(connection="c", schema_name=reserved)},
+            )
+
+    def _pg_connection(self) -> ConnectionConfig:
+        return ConnectionConfig(
+            dialect="postgresql+psycopg",
+            host="localhost",
+            port=5432,
+            user="omop",
+            password="secret",
+            database_name="omop_cdm",
         )
-        with pytest.raises(RuntimeError, match=f"{reserved!r}.*test-owner"):
-            Resolver(cfg).resolve_database("default")
 
     def test_cdm_database_resolve_raises_on_reserved_vocab_schema(self):
+        """Uses a Postgres connection, not SQLite: vocab_schema/results_schema
+        fold to None on a dialect with no schema concept, which would mask
+        the reserved-schema collision this test exists to check."""
         reserved = self._reserved_name()
-        cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
-            databases={
-                "default": CDMDatabaseConfig(
-                    connection="c", schema_name="omop", vocab_schema=reserved
-                )
-            },
-        )
-        with pytest.raises(RuntimeError, match=f"{reserved!r}.*test-owner"):
-            Resolver(cfg).resolve_database("default")
+        with pytest.raises(ValidationError, match=f"{reserved!r}.*test-owner"):
+            StackConfig.for_session(
+                connections={"c": self._pg_connection()},
+                databases={
+                    "default": CDMDatabaseConfig(
+                        connection="c", schema_name="omop", vocab_schema=reserved
+                    )
+                },
+            )
 
     def test_cdm_database_resolve_raises_on_reserved_results_schema(self):
         reserved = self._reserved_name()
-        cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
-            databases={
-                "default": CDMDatabaseConfig(
-                    connection="c", schema_name="omop", results_schema=reserved
-                )
-            },
-        )
-        with pytest.raises(RuntimeError, match=f"{reserved!r}.*test-owner"):
-            Resolver(cfg).resolve_database("default")
+        with pytest.raises(ValidationError, match=f"{reserved!r}.*test-owner"):
+            StackConfig.for_session(
+                connections={"c": self._pg_connection()},
+                databases={
+                    "default": CDMDatabaseConfig(
+                        connection="c", schema_name="omop", results_schema=reserved
+                    )
+                },
+            )
 
     def test_non_reserved_schema_name_resolves_fine(self, minimal_stack):
         res = Resolver(minimal_stack).resolve_database("default")
-        assert res.schema_name == "omop"
+        assert res.schema_name is None
 
     def test_hand_built_resolved_database_raises_on_create_engine(self, minimal_stack):
         """Defense in depth: a ResolvedDatabase built directly (bypassing
@@ -591,6 +610,47 @@ class TestReservedSchemaCollision:
         )
         with pytest.raises(RuntimeError, match=f"{reserved!r}.*test-owner"):
             res.create_engine()
+
+
+class TestCdmSchemaDialectValidation:
+    """StackConfig itself rejects a vocab_schema/results_schema configured
+    against a connection with no real multi-schema concept, rather than
+    letting it be silently folded away at resolve() time."""
+
+    def test_raises_on_vocab_schema_against_sqlite(self):
+        with pytest.raises(ValidationError, match="vocab_schema.*no schema concept"):
+            StackConfig.for_session(
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                databases={
+                    "default": CDMDatabaseConfig(connection="c", vocab_schema="vocab")
+                },
+            )
+
+    def test_raises_on_results_schema_against_sqlite(self):
+        with pytest.raises(ValidationError, match="results_schema.*no schema concept"):
+            StackConfig.for_session(
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                databases={
+                    "default": CDMDatabaseConfig(connection="c", results_schema="results")
+                },
+            )
+
+    def test_schema_name_against_sqlite_raises(self):
+        """schema_name is opt-in (default None) exactly like vocab_schema/
+        results_schema now, so it gets the same dialect check, no more
+        exemption."""
+        with pytest.raises(ValidationError, match="schema_name.*no schema concept"):
+            StackConfig.for_session(
+                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                databases={
+                    "default": CDMDatabaseConfig(connection="c", schema_name="omop")
+                },
+            )
+
+    def test_vocab_schema_against_postgres_is_fine(self, pg_stack):
+        res = Resolver(pg_stack).resolve_database("default")
+        assert isinstance(res, ResolvedCDMDatabase)
+        assert res.vocab_schema == "omop_vocab"
 
 
 class TestPoolPrePing:

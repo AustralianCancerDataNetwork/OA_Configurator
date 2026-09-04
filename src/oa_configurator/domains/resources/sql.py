@@ -309,13 +309,19 @@ def register_reserved_schema(name: str, *, owner: str) -> None:
     _reserved_schemas[name] = owner
 
 
+def _reserved_schema_message(db_schema: str | None) -> str | None:
+    """Message describing why db_schema collides with a reserved schema, or None if it doesn't."""
+    owner = _reserved_schemas.get(db_schema)
+    if owner is None:
+        return None
+    return f"db_schema cannot be {db_schema!r}: reserved for internal use by {owner!r}."
+
+
 def reject_reserved_schema(db_schema: str | None) -> None:
     """Raise RuntimeError if db_schema collides with a reserved schema, naming the owner."""
-    owner = _reserved_schemas.get(db_schema)
-    if owner is not None:
-        raise RuntimeError(
-            f"db_schema cannot be {db_schema!r}: reserved for internal use by {owner!r}."
-        )
+    message = _reserved_schema_message(db_schema)
+    if message is not None:
+        raise RuntimeError(message)
 
 
 @contextmanager

@@ -138,7 +138,7 @@ class TestConnectionsAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite")}
+                connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -158,6 +158,8 @@ class TestConnectionsAdd:
                 "test_cdm",
                 "--dialect",
                 "sqlite",
+                "--database-name",
+                ":memory:",
                 "--test-only",
                 "true",
             ],
@@ -169,7 +171,17 @@ class TestConnectionsAdd:
     def test_test_only_flag_accepts_false_variants(self, isolated_config):
         result = runner.invoke(
             cli.app,
-            ["connections", "add", "cdm", "--dialect", "sqlite", "--test-only", "no"],
+            [
+                "connections",
+                "add",
+                "cdm",
+                "--dialect",
+                "sqlite",
+                "--database-name",
+                ":memory:",
+                "--test-only",
+                "no",
+            ],
         )
         assert result.exit_code == 0, result.output
         config = _load_from_path(isolated_config)
@@ -187,7 +199,7 @@ class TestConnectionsList:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite")}
+                connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
             ),
         )
         result = runner.invoke(cli.app, ["connections", "list"])
@@ -220,7 +232,9 @@ class TestConnectionsList:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "test_cdm": ConnectionConfig(dialect="sqlite", test_only=True)
+                    "test_cdm": ConnectionConfig(
+                        dialect="sqlite", database_name=":memory:", test_only=True
+                    )
                 },
             ),
         )
@@ -235,7 +249,11 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite")}
+                connections={
+                    "cdm": ConnectionConfig(
+                        dialect="postgresql+psycopg", host="localhost", database_name="cdm"
+                    )
+                }
             ),
         )
         result = runner.invoke(
@@ -261,7 +279,7 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"emb": ConnectionConfig(dialect="sqlite")}
+                connections={"emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -277,7 +295,7 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite")}
+                connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -358,7 +376,7 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"emb": ConnectionConfig(dialect="sqlite")}
+                connections={"emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -392,7 +410,11 @@ class TestDatabasesList:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite")},
+                connections={
+                    "cdm": ConnectionConfig(
+                        dialect="postgresql+psycopg", host="localhost", database_name="cdm"
+                    )
+                },
                 databases={
                     "cdm_db": CDMDatabaseConfig(connection="cdm", schema_name="omop")
                 },
@@ -416,14 +438,12 @@ class TestDatabasesList:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "cdm": ConnectionConfig(dialect="sqlite"),
-                    "vocab": ConnectionConfig(dialect="sqlite"),
-                    "emb": ConnectionConfig(dialect="sqlite"),
+                    "cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
+                    "vocab": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
+                    "emb": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
                 },
                 databases={
-                    "cdm_db": CDMDatabaseConfig(
-                        connection="cdm", schema_name="omop", vocab_connection="vocab"
-                    ),
+                    "cdm_db": CDMDatabaseConfig(connection="cdm", vocab_connection="vocab"),
                     "emb_db": GenericDatabaseConfig(connection="emb"),
                 },
             ),
@@ -801,6 +821,18 @@ def _echo_default(text, default="", **kwargs):
     return default
 
 
+def _prompt_sqlite_defaults(text, default="", **kwargs):
+    """typer.prompt stand-in: supplies a valid sqlite dialect/database_name
+    for a freshly-created ConnectionConfig's two required-in-combination
+    fields, echoes every other field's offered default.
+    """
+    if text.startswith("SQLAlchemy dialect string"):
+        return "sqlite"
+    if text.startswith("Database name on the server"):
+        return ":memory:"
+    return default
+
+
 class TestRunConfigurePackage:
     def test_non_interactive_uses_given_names(self, isolated_config):
         _seed(
@@ -883,7 +915,7 @@ class TestRunConfigurePackage:
     def test_interactive_creates_database_and_connection_recursively(
         self, isolated_config, monkeypatch
     ):
-        monkeypatch.setattr(cli.typer, "prompt", _echo_default)
+        monkeypatch.setattr(cli.typer, "prompt", _prompt_sqlite_defaults)
         monkeypatch.setattr(
             cli.typer, "confirm", lambda *a, **k: False
         )  # decline both optional databases
@@ -897,7 +929,7 @@ class TestRunConfigurePackage:
         database = config.databases["cdm_db"]
         assert isinstance(database, CDMDatabaseConfig)
         assert database.connection in config.connections
-        assert database.schema_name == "omop"
+        assert database.schema_name is None
         # vocab_connection is optional, so it is never auto-created
         assert database.vocab_connection is None
         # both optional databases were declined, so neither was written
@@ -910,7 +942,7 @@ class TestRunConfigurePackage:
         """A plain Optional RefTo field (is_test=False) gets the same
         'Configure this?' skip prompt as a test field; declining leaves it
         unset rather than resolving/creating an entry."""
-        monkeypatch.setattr(cli.typer, "prompt", _echo_default)
+        monkeypatch.setattr(cli.typer, "prompt", _prompt_sqlite_defaults)
         monkeypatch.setattr(cli.typer, "confirm", lambda *a, **k: False)
         _seed(isolated_config, StackConfig.for_session())
 
@@ -926,7 +958,7 @@ class TestRunConfigurePackage:
         resolves it through the normal RefTo flow, with no test_only
         requirement, unlike the test-database path: it happily reuses
         cdm_db (created earlier in the same run) via the offered default."""
-        monkeypatch.setattr(cli.typer, "prompt", _echo_default)
+        monkeypatch.setattr(cli.typer, "prompt", _prompt_sqlite_defaults)
 
         def confirm(text, *a, **k):
             return text == "Configure secondary_db?"
@@ -952,7 +984,7 @@ class TestRunConfigurePackage:
             seen[text] = seen.get(text, 0) + 1
             if text.startswith("Hostname") and seen[text] == 2:
                 return "test-host"
-            return default
+            return _prompt_sqlite_defaults(text, default, **kwargs)
 
         monkeypatch.setattr(cli.typer, "prompt", prompt)
         # accept the test database, decline the unrelated non-test optional one
@@ -1055,7 +1087,6 @@ class TestRunConfigurePackage:
                         "dialect": "sqlite",
                         "database_name": ":memory:",
                     },
-                    "schema_name": "omop",
                 },
             },
             interactive=False,
@@ -1066,7 +1097,7 @@ class TestRunConfigurePackage:
         assert cdm_db_name in config.databases
         conn_name = config.databases[cdm_db_name].connection
         assert config.connections[conn_name].dialect == "sqlite"
-        assert config.databases[cdm_db_name].schema_name == "omop"
+        assert config.databases[cdm_db_name].schema_name is None
 
     def test_non_interactive_one_shot_missing_required_nested_field_fails(
         self, isolated_config
@@ -1133,8 +1164,6 @@ class TestConfigureSetFlag:
                 "cdm_db.connection.dialect=sqlite",
                 "--set",
                 "cdm_db.connection.database_name=:memory:",
-                "--set",
-                "cdm_db.schema_name=omop",
             ],
         )
         assert result.exit_code == 0, result.output
@@ -1155,7 +1184,9 @@ class TestConfigureSetFlag:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "prod": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "prod": ConnectionConfig(
+                        dialect="postgresql+psycopg", host="localhost", database_name="prod"
+                    )
                 },
                 databases={
                     "cdm_db_prod": CDMDatabaseConfig(

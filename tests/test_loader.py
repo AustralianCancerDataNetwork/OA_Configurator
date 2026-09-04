@@ -31,6 +31,7 @@ def _clear_cache():
 
 
 def _make_config_file(tmp_path: Path, **connection_kwargs) -> Path:
+    connection_kwargs.setdefault("database_name", ":memory:")
     path = tmp_path / "config.toml"
     save_stack_config(
         StackConfig.for_session(
@@ -187,7 +188,9 @@ class TestConfigCache:
         path = tmp_path / "config.toml"
         path.write_text("")
         st = path.stat()
-        original = StackConfig.for_session(connections={"cdm": ConnectionConfig(dialect="sqlite")})
+        original = StackConfig.for_session(
+            connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+        )
 
         _ConfigCache.put(path, st, original)
         retrieved = _ConfigCache.get(path, st)
