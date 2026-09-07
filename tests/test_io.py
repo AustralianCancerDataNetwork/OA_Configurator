@@ -199,7 +199,7 @@ class TestSaveStackConfig:
         out = tmp_path / "config.toml"
         out.write_text("[tools.empty_tool]\n", encoding="utf-8")
 
-        loaded = _load_from_path(out)
+        loaded = load_stack_config_from_path(out)
         loaded.tools["other_tool"] = {"enabled": True}
 
         save_stack_config(loaded, out)

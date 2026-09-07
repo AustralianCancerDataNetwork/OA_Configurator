@@ -36,10 +36,14 @@ from .domains.resources.sql import (
 )
 from .domains.vector_stores.schema import ResolvedVectorStore, VectorStoreConfig
 from .io import ConfigSaveError, FLAT_ENV_PATH, save_stack_config, write_env_file
-from .loader import DEFAULT_CONFIG_PATH, load_stack_config
+from .loader import (
+    DEFAULT_CONFIG_PATH,
+    load_stack_config,
+    load_stack_config_from_path,
+)
 from .logging_config import (
     LoggingConfig,
-    RedactingFormatter,
+    RedactingFormatter,  # ty: ignore[deprecated]
     configure_logging,
     get_logger,
 )
@@ -47,9 +51,18 @@ from .package_base import (
     ConfigurationError,
     PackageConfigBase,
     PackageConfigValidationError,
+    StackConfigValidationError,
     plan_configure,
 )
-from .refs import MASK, RefTo, Secret, Sensitive, is_sensitive, safe_endpoint
+from .refs import (
+    MASK,
+    RefTo,
+    Secret,
+    SecretSafeBaseModel,
+    Sensitive,
+    is_sensitive,
+    safe_endpoint,
+)
 from .resolver import Resolver, ResolvedToolConfig
 from .stack_config import (
     StackConfig,
@@ -91,9 +104,11 @@ __all__ = [
     "SchemaBoundInspector",
     "SchemaDriftError",
     "Secret",
+    "SecretSafeBaseModel",
     "Sensitive",
     "SensitiveValueLeak",
     "StackConfig",
+    "StackConfigValidationError",
     "UnknownRefTarget",
     "VectorStoreConfig",
     "assert_no_sensitive_values_leak",
@@ -105,6 +120,7 @@ __all__ = [
     "guard_schema_provenance",
     "is_sensitive",
     "load_stack_config",
+    "load_stack_config_from_path",
     "mismatched_kind_refs",
     "plan_configure",
     "qualified",

@@ -245,7 +245,7 @@ class DatabaseKind(str, Enum):
     CDM = "cdm"
 
 
-class DatabaseConfig(BaseModel):
+class DatabaseConfig(SecretSafeBaseModel):
     """Shared interface for every named database: a connection plus a schema
     to route into.
 

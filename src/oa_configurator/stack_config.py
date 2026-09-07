@@ -32,7 +32,7 @@ from .domains.resources.schema import (
 from .domains.resources.sql import _reserved_schema_message, supports_schemas
 from .domains.vector_stores.schema import VectorStoreConfig
 from .logging_config import LoggingConfig
-from .refs import _iter_refs
+from .refs import SecretSafeBaseModel, _iter_refs
 
 
 def unresolved_refs(instance: BaseModel, config: StackConfig) -> list[tuple[str, str, str]]:
@@ -147,7 +147,7 @@ def _ref_section(target: type[BaseModel], *, field_name: str | None = None) -> s
         ) from None
 
 
-class StackConfig(BaseModel):
+class StackConfig(SecretSafeBaseModel):
     """Root model for ~/.config/omop/config.toml.
 
     Holds the entire OMOP stack configuration in one object: named
