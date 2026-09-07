@@ -46,6 +46,52 @@ def _create_database_permission_message(db_name: str, username: str | None) -> s
         f"  Grant CREATEDB to {username!r}, or create {db_name!r} yourself before running tests."
     )
 
+def drop_test_database(connection: "ResolvedConnection") -> bool:
+    """Drop one configured PostgreSQL test database.
+
+    Parameters
+    ----------
+    connection : ResolvedConnection
+        Resolved connection whose configured database is marked ``test_only``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the database existed and was dropped, otherwise ``False``.
+
+    Raises
+    ------
+    ValueError
+        If the target is a PostgreSQL system database.
+    sqlalchemy.exc.SQLAlchemyError
+        If PostgreSQL cannot drop the database, for example because active
+        sessions still use it.
+    """
+    if not connection.test_only:
+        raise ValueError(
+            f"Refusing to drop database for non-test connection {connection.name!r}."
+        )
+
+    target = sa.engine.make_url(connection.url)
+    if target.database is None:
+        raise ValueError("Refusing to drop a PostgreSQL connection without a database name.")
+    if target.database in {"postgres", "template0", "template1"}:
+        raise ValueError(f"Refusing to drop PostgreSQL system database {target.database!r}.")
+
+    PostgresTestStrategy()._guard_against_production_target(target)
+    engine = sa.create_engine(target.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            try:
+                conn.execute(sa.text(_pg_ddl("DROP DATABASE {}", _pg_ident(target.database))))
+            except sa_exc.ProgrammingError as exc:
+                if getattr(exc.orig, "sqlstate", None) == "3D000":
+                    return False
+                raise
+    finally:
+        engine.dispose()
+    return True
+
 
 class PostgresTestStrategy(TestDatabaseStrategy):
     """Test-database provisioning for PostgreSQL.

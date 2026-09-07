@@ -1394,3 +1394,65 @@ class TestVectorStoresList:
         assert result.exit_code == 0
         assert "vs" in result.output
         assert "pgvector" in result.output
+
+
+class TestCleanupTestDatabases:
+    def test_preview_filters_to_test_only_postgres_connections(
+        self, isolated_config, monkeypatch
+    ):
+        _seed(
+            isolated_config,
+            StackConfig.for_session(
+                connections={
+                    "prod": ConnectionConfig(
+                        dialect="postgresql+psycopg",
+                        host="db",
+                        database_name="prod",
+                    ),
+                    "test": ConnectionConfig(
+                        dialect="postgresql+psycopg",
+                        host="db",
+                        database_name="test_db",
+                        test_only=True,
+                    ),
+                    "sqlite_test": ConnectionConfig(
+                        dialect="sqlite",
+                        database_name=":memory:",
+                        test_only=True,
+                    ),
+                }
+            ),
+        )
+        dropped: list[str] = []
+        monkeypatch.setattr(cli, "drop_test_database", lambda target: dropped.append(target.name) or True)
+
+        result = runner.invoke(cli.app, ["cleanup-test-databases"])
+
+        assert result.exit_code == 0, result.output
+        assert "test_db" in result.output
+        assert "prod" not in result.output
+        assert "Preview only" in result.output
+        assert dropped == []
+
+    def test_confirm_drops_selected_connection(self, isolated_config, monkeypatch):
+        _seed(
+            isolated_config,
+            StackConfig.for_session(
+                connections={
+                    "test": ConnectionConfig(
+                        dialect="postgresql+psycopg",
+                        host="db",
+                        database_name="test_db",
+                        test_only=True,
+                    )
+                }
+            ),
+        )
+        dropped: list[str] = []
+        monkeypatch.setattr(cli, "drop_test_database", lambda target: dropped.append(target.name) or True)
+
+        result = runner.invoke(cli.app, ["cleanup-test-databases", "--confirm"])
+
+        assert result.exit_code == 0, result.output
+        assert dropped == ["test"]
+        assert "dropped" in result.output

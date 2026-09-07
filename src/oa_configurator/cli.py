@@ -28,7 +28,7 @@ from .cli_support import _build_entry_params, _save_stack_config_or_exit
 from .domains.llm.cli import models_app, providers_app
 from .domains.resources.cli import connections_app, databases_app
 from .domains.resources.schema import ResolvedCDMDatabase, ResolvedDatabase, Role
-from .domains.resources.sql import SchemaDriftError, guard_schema_provenance
+from .domains.resources.sql import SchemaDriftError, guard_schema_provenance, Dialect
 from .domains.vector_stores.cli import vector_stores_app
 from .io import save_stack_config, write_env_file
 from .loader import CONFIG_PATH, load_stack_config
@@ -36,6 +36,7 @@ from .logging_config import configure_logging
 from .stack_config import StackConfig
 from .package_base import PackageConfigBase
 from .resolver import Resolver
+from .testing.postgres import drop_test_database
 
 app = typer.Typer(name="omop-config", no_args_is_help=True, add_completion=False)
 console = Console()
@@ -313,6 +314,52 @@ def export_env() -> None:
 
     env_path = write_env_file(Resolver(config))
     console.print(f"[green]✓[/green] Wrote [dim]{env_path}[/dim]")
+
+@app.command("cleanup-test-databases")
+def cleanup_test_databases(
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", help="Actually drop the selected test databases."),
+    ] = False,
+    connection: Annotated[
+        list[str] | None,
+        typer.Option("--connection", help="Test connection to clean; repeatable."),
+    ] = None,
+) -> None:
+    """Preview or drop configured PostgreSQL test databases.
+
+    Only connections marked ``test_only=true`` are eligible. Without
+    ``--confirm`` this command only previews the selected databases.
+    """
+    config = load_stack_config()
+    selected = set(connection or config.connections)
+    unknown = selected - config.connections.keys()
+    if unknown:
+        raise typer.BadParameter(f"Unknown connection(s): {', '.join(sorted(unknown))}")
+
+    targets = []
+    resolver = Resolver(config)
+    for name in sorted(selected):
+        entry = config.connections[name]
+        if not entry.test_only or not entry.dialect.startswith(Dialect.POSTGRESQL):
+            continue
+        targets.append((name, resolver.resolve_connection(name)))
+
+    if not targets:
+        console.print("[yellow]No test-only PostgreSQL connections selected.[/yellow]")
+        return
+
+    console.print("Selected test databases:")
+    for name, target in targets:
+        console.print(f"  {name}: {target.safe_url}")
+    if not confirm:
+        console.print("[yellow]Preview only. Re-run with --confirm to drop them.[/yellow]")
+        return
+
+    for name, target in targets:
+        dropped = drop_test_database(target)
+        status = "dropped" if dropped else "already absent"
+        console.print(f"{name}: {status}")
 
 
 @app.command(name="configure", cls=_DynamicConfigureGroup)  # ty: ignore[invalid-argument-type]
