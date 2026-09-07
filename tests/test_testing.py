@@ -72,6 +72,7 @@ class TestIsolatedTestDatabase:
         with isolated_test_database(DemoTestConfig, "test_cdm_db") as db:
             assert db.connection.execute(pytest.importorskip("sqlalchemy").text("SELECT 1")).scalar() == 1
             assert db.session.connection() is db.connection
+            assert db.committing_engine is db.connection.engine
 
     def test_fails_loudly_when_connection_is_not_test_only(self, monkeypatch):
         cfg = _stack_config(test_only=False)

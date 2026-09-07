@@ -55,7 +55,7 @@ Every entry declares an explicit `kind`, discriminating which of the fields belo
 |---|---|---|---|---|
 | `kind` | string | **yes** | both | Discriminator. See [DatabaseKind](api/resources.md#databasekind). |
 | `connection` | string | **yes** | both | Connection name (from `[connections.*]`) used as the primary server |
-| `schema_name` | string | no | both | Schema this database's tables live in. Defaults to `"omop"` for the CDM kind only; the generic kind has no default (unset means "use the connection's own default"). |
+| `schema_name` | string | no | both | Schema this database's tables live in. No default on either kind (unset means "use the connection's own default", e.g. Postgres's own `search_path`). Rejected at construction time if set against a connection whose dialect has no real schema concept (e.g. SQLite). |
 | `vocab_connection` | string | no | CDM only | Separate connection if vocabulary lives on a different server. Falls back to `connection`. |
 | `vocab_schema` | string | no | CDM only | Vocabulary schema. Falls back to `schema_name` when not set. |
 | `results_schema` | string | no | CDM only | Achilles / Atlas results schema |

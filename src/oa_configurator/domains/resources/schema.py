@@ -13,7 +13,7 @@ from sqlalchemy.engine import URL, Engine
 import sqlalchemy as sa
 
 from ...refs import RefTo, Secret
-from .sql import Role, reject_reserved_schema, supports_schemas
+from .sql import SCHEMA_TRANSLATE_MAP_KEY, Role, reject_reserved_schema, supports_schemas
 
 if TYPE_CHECKING:
     from ...stack_config import StackConfig
@@ -203,6 +203,33 @@ def schema_for_role(instance: BaseModel, role: Role) -> str | None:
         if value is not None:
             return value
     return getattr(instance, field_by_role[Role.PRIMARY])
+
+
+def _merged_schema_translate_map(
+    execution_options: dict[str, Any] | None,
+    configured_map: dict[str | None, str | None],
+) -> dict[str, Any]:
+    """Merge execution_options with the resolver's own schema_translate_map.
+
+    A caller may extend the map with a key the resolver doesn't define, such
+    as a package's own reserved-schema role layered on top of the CDM map.
+    A caller may not supply a key the resolver itself owns (``None``,
+    ``"vocab"``, ``"results"``); silently letting a caller's own value win
+    there would defeat the configured schema routing with no signal that it
+    happened.
+    """
+    merged_opts = dict(execution_options or {})
+    caller_map = merged_opts.pop(SCHEMA_TRANSLATE_MAP_KEY, None) or {}
+    owned_conflicts = sorted(str(key) for key in caller_map if key in configured_map)
+    if owned_conflicts:
+        raise ValueError(
+            f"execution_options[{SCHEMA_TRANSLATE_MAP_KEY!r}] must not include "
+            f"resolver-managed key(s) {owned_conflicts}: create_engine() "
+            "sets those from the resolved config. Extend with additional "
+            "keys instead, such as a package's own reserved schema role."
+        )
+    merged_opts[SCHEMA_TRANSLATE_MAP_KEY] = {**caller_map, **configured_map}
+    return merged_opts
 
 
 class DatabaseKind(str, Enum):
@@ -472,9 +499,11 @@ class ResolvedDatabase:
             here; anything else raises as a ResolvedDatabase has no vocab/results
             role-splitting. Defaults to ``Role.PRIMARY``.
         execution_options : dict, optional
-            Additional execution options merged into the engine. The
-            ``schema_translate_map`` key is set automatically and must
-            not be supplied here.
+            Additional execution options merged into the engine. A
+            ``schema_translate_map`` here may add keys the resolver doesn't
+            define, but may not include ``None`` (the resolver's own key):
+            that key is always set from the resolved config, and overriding
+            it here would silently defeat the configured schema routing.
         **kwargs
             Forwarded to ``sqlalchemy.create_engine``.
 
@@ -485,6 +514,9 @@ class ResolvedDatabase:
 
         Raises
         ------
+        ValueError
+            If ``execution_options['schema_translate_map']`` includes any resolver-
+            managed keys.
         RuntimeError
             If ``schema_name`` collides with a reserved schema. Normally
             already caught by :meth:`DatabaseConfig.resolve`; repeated here
@@ -493,8 +525,7 @@ class ResolvedDatabase:
         """
         reject_reserved_schema(self.schema_name)
         engine = self.connection_target(role).create_engine(**kwargs)
-        merged_opts = dict(execution_options or {})
-        merged_opts.setdefault("schema_translate_map", self.schema_translate_map())
+        merged_opts = _merged_schema_translate_map(execution_options, self.schema_translate_map())
         return engine.execution_options(**merged_opts)
 
     def connection_target(self, role: Role = Role.PRIMARY) -> ResolvedConnection:
@@ -643,9 +674,11 @@ class ResolvedCDMDatabase(ResolvedDatabase):
             Which connection to create an engine for. Defaults to
             ``Role.PRIMARY``.
         execution_options : dict, optional
-            Additional execution options merged into the engine. The
-            ``schema_translate_map`` key is set automatically and must
-            not be supplied here.
+            Additional execution options merged into the engine.
+            Additional execution options merged into the engine. A
+            ``schema_translate_map`` here may add keys the resolver doesn't
+            define, but may not include resolver-managed keys to prevent
+            silent overwrites.
         **kwargs
             Forwarded to ``sqlalchemy.create_engine``.
 
@@ -656,6 +689,9 @@ class ResolvedCDMDatabase(ResolvedDatabase):
 
         Raises
         ------
+        ValueError
+            If ``execution_options['schema_translate_map']`` includes any
+            resolver-managed keys.
         RuntimeError
             If ``schema_name``, ``vocab_schema``, or ``results_schema``
             collides with a reserved schema. Normally already caught by
@@ -669,8 +705,7 @@ class ResolvedCDMDatabase(ResolvedDatabase):
         reject_reserved_schema(self.vocab_schema)
         reject_reserved_schema(self.results_schema)
         engine = self.connection_target(role).create_engine(**kwargs)
-        merged_opts = dict(execution_options or {})
-        merged_opts.setdefault("schema_translate_map", self.schema_translate_map())
+        merged_opts = _merged_schema_translate_map(execution_options, self.schema_translate_map())
         return engine.execution_options(**merged_opts)
 
     def vocab_engine_for(

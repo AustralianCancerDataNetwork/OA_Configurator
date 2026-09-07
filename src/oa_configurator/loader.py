@@ -8,6 +8,8 @@ import stat
 import tomllib
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .stack_config import StackConfig
 
 logger = logging.getLogger(__name__)
@@ -97,20 +99,32 @@ def invalidate_cache() -> None:
     _ConfigCache.clear()
 
 
-def load_stack_config() -> StackConfig:
-    """Load a :class:`StackConfig` from ``CONFIG_PATH``
-    (default ``~/.config/omop/config.toml``, overridable via ``OA_CONFIG_PATH``).
+def load_stack_config(path: str | Path = CONFIG_PATH) -> StackConfig:
+    """Load a :class:`StackConfig` from *path*. Defaults to ``CONFIG_PATH``,
+    which can be overridden by setting the ``OA_CONFIG_PATH`` environment variable.
 
+    Notes
+    -----
     ``OA_CONFIG_PATH`` is resolved when this module is first imported. Set it
-    before starting the process; changing it at runtime does not change
+    before starting the process as changing it at runtime does not change
     ``CONFIG_PATH``.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path, optional
+        Explicit configuration file to load. Omitted uses ``CONFIG_PATH``.
+
+    Returns
+    -------
+    StackConfig
+        Parsed and validated stack configuration.
 
     Raises
     ------
     FileNotFoundError
-        If ``CONFIG_PATH`` does not exist.
+        If the resolved path does not exist.
     """
-    return _load_from_path(CONFIG_PATH)
+    return _load_from_path(path)
 
 
 def _load_from_path(path: str | Path) -> StackConfig:
@@ -142,7 +156,14 @@ def _load_from_path(path: str | Path) -> StackConfig:
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(f"Malformed TOML in {resolved_path}: {exc}") from exc
 
-    config = StackConfig.model_validate(data)
+    try:
+        config = StackConfig.model_validate(data)
+    except ValidationError as exc:
+        # headless=True to raise the real error without revealing the
+        # secret values in the config file
+        from .resolver import _abort_on_invalid_entry
+
+        _abort_on_invalid_entry(StackConfig, exc, headless=True)
     config.bind_loaded_path(resolved_path)
 
     _ConfigCache.put(resolved_path, st, config)

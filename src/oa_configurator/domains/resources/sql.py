@@ -42,6 +42,25 @@ class Role(StrEnum):
     RESULTS = "results"
 
 
+class Dialect(StrEnum):
+    """SQLAlchemy backend names (``Engine.dialect.name`` / ``get_backend_name()``)
+    this codebase recognizes, independent of the driver.
+
+    Distinct from ``ConnectionConfig.dialect``, which stays a free-form
+    string to carry a driver suffix such as ``"postgresql+psycopg"``.
+    """
+
+    POSTGRESQL = "postgresql"
+    SQLITE = "sqlite"
+
+
+DEFAULT_POSTGRES_SCHEMA = "public"
+"""Postgres's own default schema name, not a concept this codebase defines."""
+
+SCHEMA_TRANSLATE_MAP_KEY = "schema_translate_map"
+"""The execution_options key SQLAlchemy itself defines for schema translation."""
+
+
 def _as_bind(bindable: Bindable) -> Engine | Connection:
     """Reduce bindable to an Engine/Connection.
 
@@ -56,7 +75,7 @@ def _as_bind(bindable: Bindable) -> Engine | Connection:
 def schema_of(bindable: Bindable) -> str | None:
     """The None-keyed entry of bindable's schema_translate_map, or None if unset."""
     bind = _as_bind(bindable)
-    stm = bind.get_execution_options().get("schema_translate_map")
+    stm = bind.get_execution_options().get(SCHEMA_TRANSLATE_MAP_KEY)
     return stm.get(None) if stm else None
 
 
@@ -214,7 +233,7 @@ def schema_options(
     Returns
     -------
     dict
-        ``{"schema_translate_map": {...}}``, ready to pass as
+        ``{SCHEMA_TRANSLATE_MAP_KEY: {...}}``, ready to pass as
         ``execution_options=...`` on a single statement/connection.
         Carries forward any ``vocab``/``results``-keyed entries already on
         ``bindable``'s own map, overriding only the ``None`` key.
@@ -224,9 +243,9 @@ def schema_options(
         ``ResolvedCDMDatabase``.
     """
     bind = _as_bind(bindable)
-    existing = bind.get_execution_options().get("schema_translate_map") or {}
+    existing = bind.get_execution_options().get(SCHEMA_TRANSLATE_MAP_KEY) or {}
     effective_schema = existing.get(None) if schema is ... else schema
-    return {"schema_translate_map": {**existing, None: effective_schema}}
+    return {SCHEMA_TRANSLATE_MAP_KEY: {**existing, None: effective_schema}}
 
 
 def supports_schemas(bindable: Bindable | str) -> bool:
@@ -247,7 +266,7 @@ def supports_schemas(bindable: Bindable | str) -> bool:
     schema_translate_map resolves both sides to the same connection.
     """
     dialect_name = bindable if isinstance(bindable, str) else _as_bind(bindable).dialect.name
-    return dialect_name != "sqlite"
+    return dialect_name != Dialect.SQLITE
 
 
 def ensure_schema(bindable: Engine | Connection, schema: str | None) -> None:
@@ -265,7 +284,7 @@ def ensure_schema(bindable: Engine | Connection, schema: str | None) -> None:
     since creating the wrong schema by silent inference would be far worse
     than a missing default.
     """
-    if schema is None or schema == "public":
+    if schema is None or schema == DEFAULT_POSTGRES_SCHEMA:
         return
     bind = _as_bind(bindable)
     if not supports_schemas(bind):
@@ -384,7 +403,7 @@ class SchemaDriftError(RuntimeError):
 
 
 _SYSTEM_SCHEMAS: dict[str, frozenset[str]] = {
-    "postgresql": frozenset({"information_schema", "pg_catalog", "pg_toast"}),
+    Dialect.POSTGRESQL: frozenset({"information_schema", "pg_catalog", "pg_toast"}),
 }
 
 

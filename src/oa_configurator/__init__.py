@@ -18,6 +18,8 @@ from .domains.resources.schema import (
 )
 from .domains.resources.sql import (
     SCHEMA_PROVENANCE_SCHEMA,
+    SCHEMA_TRANSLATE_MAP_KEY,
+    Dialect,
     SchemaBoundInspector,
     SchemaDriftError,
     autocommit_connection,
@@ -62,6 +64,7 @@ __all__ = [
     "ConfigSaveError",
     "ConnectionConfig",
     "DEFAULT_CONFIG_PATH",
+    "Dialect",
     "FLAT_ENV_PATH",
     "DatabaseConfig",
     "DatabaseKind",
@@ -84,6 +87,7 @@ __all__ = [
     "ResolvedVectorStore",
     "Role",
     "SCHEMA_PROVENANCE_SCHEMA",
+    "SCHEMA_TRANSLATE_MAP_KEY",
     "SchemaBoundInspector",
     "SchemaDriftError",
     "Secret",

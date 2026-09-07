@@ -25,11 +25,12 @@ isolation, SQLite gets a fresh disposable database per call. Pass
 
 For code under test that needs a real, genuinely-committing ``Engine``
 (``.connect()``/``.begin()`` repeatedly, which a rolled-back ``Connection``
-can't stand in for), use ``db.connection.engine`` directly::
+can't stand in for), use ``db.committing_engine``. It is outside the rollback
+transaction, so register cleanup with ``cleanup_after_test``::
 
     @pytest.fixture
     def pg_engine(pg_db):
-        return pg_db.connection.engine
+        return pg_db.committing_engine
 
 Registers one pytest marker per supported dialect (``sqlite``,
 ``postgresql``, ...), and additionally marks each one ``db_dialect`` if
@@ -54,11 +55,11 @@ time, before any DDL runs, if the resolved dialect can corrupt shared
 metadata but the test isn't marked ``db_dialect``. Recommended for every
 fixture not already covered by ``DIALECT_PARAMS``.
 
-A test that must hold a real, committing ``Engine``/``Connection`` (e.g.
-via ``db.connection.engine`` above) gets no automatic cleanup from
-``isolated_test_database()``, since rollback only isolates code operating
-on the connection it's handed. Use the ``cleanup_after_test`` fixture to
-register whatever the test needs undone at teardown.
+A test that must hold a real, committing ``Engine``/``Connection`` gets no
+automatic cleanup from ``isolated_test_database()``, since rollback only
+isolates code operating on the connection it's handed. Use the
+``cleanup_after_test`` fixture to register whatever the test needs undone at
+teardown.
 """
 
 from __future__ import annotations
@@ -71,6 +72,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.dialects import registry
 
+from ..domains.resources.sql import Dialect
 from .base import (
     IsolatedTestDatabase,
     TestDatabaseNotConfigured,
@@ -135,13 +137,13 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if "pg_db" in getattr(item, "fixturenames", ()):
             item.add_marker(pytest.mark.postgresql)
-            if _can_corrupt_shared_metadata("postgresql"):
+            if _can_corrupt_shared_metadata(Dialect.POSTGRESQL):
                 item.add_marker(pytest.mark.db_dialect)
 
 
-_STRATEGIES: dict[str, type[TestDatabaseStrategy]] = {
-    "postgresql": PostgresTestStrategy,
-    "sqlite": SQLiteTestStrategy,
+_STRATEGIES: dict[Dialect, type[TestDatabaseStrategy]] = {
+    Dialect.POSTGRESQL: PostgresTestStrategy,
+    Dialect.SQLITE: SQLiteTestStrategy,
 }
 
 
@@ -172,12 +174,13 @@ DIALECT_PARAMS = tuple(
 
 def _strategy_for(dialect_name: str) -> TestDatabaseStrategy:
     try:
-        return _STRATEGIES[dialect_name]()
-    except KeyError:
+        dialect = Dialect(dialect_name)
+    except ValueError:
         raise NotImplementedError(
             f"No test-database strategy registered for dialect {dialect_name!r}. "
-            f"Supported: {sorted(_STRATEGIES)}."
+            f"Supported: {sorted(d.value for d in _STRATEGIES)}."
         ) from None
+    return _STRATEGIES[dialect]()
 
 
 def _require_db_dialect_mark(request: pytest.FixtureRequest, field_name: str, dialect_name: str) -> None:
@@ -238,7 +241,7 @@ def isolated_test_database(
         always correct by construction).
     """
     if dialect is not None and dialect not in _STRATEGIES:
-        raise ValueError(f"Unknown dialect {dialect!r}. Registered: {sorted(_STRATEGIES)}.")
+        raise ValueError(f"Unknown dialect {dialect!r}. Registered: {sorted(d.value for d in _STRATEGIES)}.")
 
     try:
         resolved: "ResolvedDatabase" = TestDatabaseStrategy._resolve_and_check(config_cls, field_name)
@@ -246,7 +249,7 @@ def isolated_test_database(
         if dialect is None:
             pytest.skip(_skip_message(exc.field_name or field_name))
         try:
-            resolved = _STRATEGIES[dialect]().resolve_without_config()
+            resolved = _STRATEGIES[Dialect(dialect)]().resolve_without_config()
         except TestDatabaseNotConfigured:
             pytest.skip(_skip_message(exc.field_name or field_name))
 

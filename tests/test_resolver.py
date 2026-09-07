@@ -518,6 +518,22 @@ class TestCreateEngine:
         engine = res.create_engine()
         assert engine.dialect.name == "sqlite"
 
+    def test_generic_database_rejects_resolver_schema_override(self, minimal_stack):
+        resolved = Resolver(minimal_stack).resolve_database("default")
+
+        with pytest.raises(ValueError, match="must not include resolver-managed key"):
+            resolved.create_engine(
+                execution_options={"schema_translate_map": {None: "wrong"}}
+            )
+
+    def test_cdm_database_rejects_resolver_schema_override(self, pg_stack):
+        resolved = Resolver(pg_stack).resolve_database("default")
+
+        with pytest.raises(ValueError, match="must not include resolver-managed key"):
+            resolved.create_engine(
+                execution_options={"schema_translate_map": {"vocab": "wrong"}}
+            )
+
 
 class TestReservedSchemaCollision:
     """register_reserved_schema/reject_reserved_schema live in

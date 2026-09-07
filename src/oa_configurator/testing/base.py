@@ -64,6 +64,16 @@ class IsolatedTestDatabase:
     session: Session
     resolved: "ResolvedDatabase | None" = None
 
+    @property
+    def committing_engine(self) -> Engine:
+        """Return the real engine for code that must open its own connections.
+
+        Connections opened from this engine are outside the transaction that
+        protects ``connection`` and ``session``. Callers must register cleanup
+        with the ``cleanup_after_test`` fixture before using this escape hatch.
+        """
+        return self.connection.engine
+
 
 def _skip_message(name: str) -> str:
     return (

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from oa_configurator import ConnectionConfig, StackConfig
+from oa_configurator import ConfigurationError, ConnectionConfig, StackConfig
 from oa_configurator.io import save_stack_config
 from oa_configurator.loader import (
     DEFAULT_CONFIG_PATH,
@@ -111,6 +111,25 @@ class TestLoadFromPath:
         path.write_text("not [valid [ toml")
         with pytest.raises(ValueError, match="Malformed TOML"):
             _load_from_path(path)
+
+    def test_schema_rejected_config_raises_configuration_error_not_bare_validation_error(
+        self, tmp_path
+    ):
+        """A whole-config schema rejection surfaces as ConfigurationError, not
+        pydantic's own ValidationError, whose default formatting would echo the
+        rejected value verbatim, a real risk when the rejected field is a secret."""
+        path = tmp_path / "config.toml"
+        path.write_text(
+            """
+            [connections.main]
+            dialect = "sqlite"
+            database_name = ":memory:"
+            api_key = "rejected-secret"
+            """
+        )
+        with pytest.raises(ConfigurationError) as raised:
+            _load_from_path(path)
+        assert "rejected-secret" not in str(raised.value)
 
     def test_binds_loaded_path(self, tmp_path):
         path = _make_config_file(tmp_path)

@@ -33,7 +33,7 @@ database_name = "omop_cdm"
 
 ### Database
 
-Every `[databases.<name>]` entry declares an explicit `kind` (see [DatabaseKind](api/resources.md#databasekind) for the current members), no default, no inference. The kind decides which concrete fields exist on top of the shared `connection`/`schema_name` base; see [Resources](api/resources.md#genericdatabaseconfig) for the field list each kind adds (only the CDM kind carries the vocab/results role bundle, and only it defaults `schema_name` to `"omop"`).
+Every `[databases.<name>]` entry declares an explicit `kind` (see [DatabaseKind](api/resources.md#databasekind) for the current members), no default, no inference. The kind decides which concrete fields exist on top of the shared `connection`/`schema_name` base; see [Resources](api/resources.md#genericdatabaseconfig) for the field list each kind adds (only the CDM kind carries the vocab/results role bundle). `schema_name` itself has no default on either kind (unset means "use the connection's own default"), and is rejected at construction time if set against a connection whose dialect has no real schema concept (e.g. SQLite).
 
 ```toml
 [databases.emb_db]
@@ -176,6 +176,18 @@ CDM-specific: `ResolvedCDMDatabase.schema_translate_map()` returns the SQLAlchem
 ```
 
 OMOP ORM models (omop-alchemy) carry `schema=None` or `schema="vocab"` on their `__table_args__`. The translate map routes them to the correct schema at runtime without changing model definitions. Its keys correspond to the members of [`Role`](api/resources.md#role), the same enum `ResolvedCDMDatabase.connection_target()`/`create_engine()` accept for their `role` parameter. A generic `ResolvedDatabase` has its own, simpler `create_engine()` with no `role` parameter, since a generic entry only ever has one connection.
+
+`create_engine()`'s own `schema_translate_map` is authoritative, not a default: an `execution_options` argument may *extend* the map with a key the resolver doesn't own (e.g. a package's own reserved-schema role, layered on top of the CDM map, see [Vector Stores](api/vector-stores.md) for a real example), but supplying `None`/`"vocab"`/`"results"` there raises `ValueError` rather than silently overriding the configured routing.
+
+---
+
+## Dialect support across the stack
+
+[`Dialect`](api/resources.md#dialect) (`sql.py`, next to `Role`) is the one canonical enum naming the SQLAlchemy backends this codebase recognizes: `postgresql` and `sqlite` today. It sits in oa-configurator because it's needed at the bottom of the dependency graph, below every package that dispatches on it.
+
+`Dialect` itself carries no behavior and makes no claim that a given member is supported anywhere in particular. Each consuming package is expected to maintain its own `Dialect`-keyed dispatch registry (a dict from `Dialect` to that package's own implementation), raising a clear, named error for anything unregistered rather than silently misrouting or crashing unhelpfully. A caller with an arbitrary engine and an unknown dialect should always go through that package's own factory function rather than instantiating a concrete backend class directly, so an unsupported dialect fails loudly and consistently in one place.
+
+**To add a new dialect**: add it to `Dialect` here, then register it in whichever consuming package's own dispatch registry actually needs it.
 
 ---
 
