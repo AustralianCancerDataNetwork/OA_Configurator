@@ -20,6 +20,7 @@ from oa_configurator import (
     assert_no_sensitive_values_leak,
     is_sensitive,
     safe_endpoint,
+    Dialect
 )
 
 CANARY = "canary-8f21c0-do-not-render"
@@ -43,7 +44,7 @@ def _stack_with_secrets() -> StackConfig:
     return StackConfig.for_session(
         connections={
             "cdm": ConnectionConfig(
-                dialect="postgresql+psycopg",
+                dialect=Dialect.POSTGRESQL + "+psycopg",
                 host="db.hospital.org",
                 port=5432,
                 user="omop",

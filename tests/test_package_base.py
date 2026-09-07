@@ -28,6 +28,7 @@ from oa_configurator import (
     mismatched_kind_refs,
     plan_configure,
     unresolved_refs,
+    Dialect
 )
 
 
@@ -108,7 +109,7 @@ class ValidatedPackageConfig(PackageConfigBase):
 def _validated_stack(tool_values: dict[str, Any]) -> StackConfig:
     return StackConfig.for_session(
         connections={
-            "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+            "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
         },
         databases={"cdm_db": CDMDatabaseConfig(connection="db")},
         tools={"validated_tool": tool_values},
@@ -154,7 +155,7 @@ class TestPackageCandidateValidation:
     def test_wrong_reference_kind_identifies_package_field(self):
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"generic": GenericDatabaseConfig(connection="db")},
             tools={"validated_tool": {"cdm_db": "generic"}},
@@ -269,7 +270,7 @@ class TestPlanConfigure:
             {
                 "cdm_db": {
                     "connection": {
-                        "dialect": "postgresql+psycopg",
+                        "dialect": Dialect.POSTGRESQL + "+psycopg",
                         "host": "localhost",
                         "database_name": "cdm",
                     },
@@ -290,7 +291,7 @@ class TestPlanConfigure:
         cfg = StackConfig.for_session(
             connections={
                 "db": ConnectionConfig(
-                    dialect="postgresql+psycopg", host="localhost", database_name="db"
+                    dialect=Dialect.POSTGRESQL + "+psycopg", host="localhost", database_name="db"
                 )
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="db")},
@@ -370,7 +371,7 @@ class TestRefToPackageField:
     def test_passes_when_referenced_database_exists(self):
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="db")},
         )
@@ -419,7 +420,7 @@ class TestConventionBasedSharing:
     def test_two_packages_resolve_to_the_same_database(self):
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="db")},
         )
@@ -471,7 +472,7 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "prod": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=False
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=False
                 )
             },
             databases={"test_cdm_db": CDMDatabaseConfig(connection="prod")},
@@ -490,7 +491,7 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "test_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 )
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="test_conn")},
@@ -507,7 +508,7 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "test_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 )
             },
             databases={"test_cdm_db": CDMDatabaseConfig(connection="test_conn")},
@@ -526,7 +527,7 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "prod": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=False
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=False
                 )
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="prod")},
@@ -548,10 +549,10 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "prod": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=False
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=False
                 ),
                 "test_vocab": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 ),
             },
             databases={
@@ -584,7 +585,7 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "test_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 )
             },
             databases={"emb_db": GenericDatabaseConfig(connection="test_conn")},
@@ -606,7 +607,7 @@ class TestIsTestOnlyMatchEnforcement:
         cfg = StackConfig.for_session(
             connections={
                 "prod_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=False
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=False
                 )
             },
             databases={"emb_db": GenericDatabaseConfig(connection="prod_conn")},
@@ -638,7 +639,7 @@ class TestRefToAbstractDatabaseConfigRejected:
 
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="db")},
         )

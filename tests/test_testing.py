@@ -26,6 +26,7 @@ from oa_configurator import (
     PackageConfigBase,
     RefTo,
     StackConfig,
+    Dialect
 )
 from oa_configurator.config import OAConfiguratorConfig
 from oa_configurator.testing.base import TestDatabaseNotConfigured
@@ -53,7 +54,7 @@ def _stack_config(*, test_only: bool, tools: dict | None = None) -> StackConfig:
     return StackConfig.for_session(
         connections={
             "test_cdm": ConnectionConfig(
-                dialect="sqlite", database_name=":memory:", test_only=test_only
+                dialect=Dialect.SQLITE, database_name=":memory:", test_only=test_only
             )
         },
         databases={"test_cdm_db": CDMDatabaseConfig(connection="test_cdm")},
@@ -122,7 +123,7 @@ class TestIsolatedTestDatabaseDialect:
         cfg = _stack_config(test_only=True)
         monkeypatch.setattr("oa_configurator.loader.load_stack_config", lambda: cfg)
 
-        with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect="sqlite") as db:
+        with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect=Dialect.SQLITE) as db:
             assert db.connection.execute(pytest.importorskip("sqlalchemy").text("SELECT 1")).scalar() == 1
 
     def test_mismatched_dialect_raises_even_though_configured(self, monkeypatch):
@@ -133,15 +134,15 @@ class TestIsolatedTestDatabaseDialect:
         cfg = _stack_config(test_only=True)
         monkeypatch.setattr("oa_configurator.loader.load_stack_config", lambda: cfg)
 
-        with pytest.raises(ValueError, match="sqlite.*postgresql"):
-            with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect="postgresql"):
+        with pytest.raises(ValueError, match=f"{Dialect.SQLITE.value!r}.*{Dialect.POSTGRESQL.value!r}"):
+            with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect=Dialect.POSTGRESQL):
                 pass
 
     def test_unconfigured_field_falls_back_to_config_free_dialect(self, monkeypatch):
         cfg = StackConfig.for_session()
         monkeypatch.setattr("oa_configurator.loader.load_stack_config", lambda: cfg)
 
-        with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect="sqlite") as db:
+        with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect=Dialect.SQLITE) as db:
             assert db.connection.execute(pytest.importorskip("sqlalchemy").text("SELECT 1")).scalar() == 1
 
     def test_unconfigured_field_still_skips_for_a_dialect_needing_real_config(self, monkeypatch):
@@ -149,15 +150,20 @@ class TestIsolatedTestDatabaseDialect:
         monkeypatch.setattr("oa_configurator.loader.load_stack_config", lambda: cfg)
 
         with pytest.raises(pytest.skip.Exception):
-            with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect="postgresql"):
+            with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect=Dialect.POSTGRESQL):
                 pass
 
     def test_unknown_dialect_raises_immediately(self, monkeypatch):
+        """The message names what was actually resolved and what was
+        expected, both as plain dialect values ('sqlite'/'postgresql'),
+        not a bare string paired against a Dialect enum's own repr."""
         cfg = _stack_config(test_only=True)
         monkeypatch.setattr("oa_configurator.loader.load_stack_config", lambda: cfg)
 
-        with pytest.raises(ValueError, match="postgres.*sqlite"):
-            with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect="postgres"):
+        with pytest.raises(
+            ValueError, match=f"{Dialect.SQLITE.value!r}.*{Dialect.POSTGRESQL.value!r}"
+        ):
+            with isolated_test_database(DemoTestConfig, "test_cdm_db", dialect=Dialect.POSTGRESQL):
                 pass
 
 
@@ -205,7 +211,7 @@ class TestIsolatedTestSchema:
         cfg = StackConfig.for_session(
             connections={
                 "prod": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="dbhost",
                     port=5432,
                     database_name="prod_db",
@@ -310,7 +316,7 @@ class TestResolveAndCheck:
         cfg = StackConfig.for_session(
             connections={
                 "custom_test_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 )
             },
             databases={
@@ -331,7 +337,7 @@ class TestResolveAndCheck:
         cfg = StackConfig.for_session(
             connections={
                 "test_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 )
             },
             databases={

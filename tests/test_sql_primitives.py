@@ -49,6 +49,7 @@ from oa_configurator import (
     schema_of,
     schema_options,
     supports_schemas,
+    Dialect
 )
 from oa_configurator.domains.resources.sql import (
     _as_bind,
@@ -159,7 +160,7 @@ class TestSchemaInspect:
 class TestSupportsSchemas:
     def test_sqlite_does_not(self):
         cfg = StackConfig.for_session(
-            connections={"db": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+            connections={"db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
         )
         eng = Resolver(cfg).resolve_connection("db").create_engine()
         try:
@@ -167,16 +168,15 @@ class TestSupportsSchemas:
         finally:
             eng.dispose()
 
-    def test_postgres_does(self, engine):
-        if engine.dialect.name != "postgresql":
-            pytest.skip("postgres-only")
-        assert supports_schemas(engine) is True
+    def test_postgres_does(self, pg_db):
+        """Used pg_db fixture rather than the parametrized engine fixture to prevent skipping this test"""
+        assert supports_schemas(pg_db.connection) is True
 
     def test_accepts_a_dialect_name_string_directly(self):
         """A caller with only a ResolvedConnection/URL in hand shouldn't
         need to build an engine just to ask this."""
-        assert supports_schemas("sqlite") is False
-        assert supports_schemas("postgresql") is True
+        assert supports_schemas(Dialect.SQLITE) is False
+        assert supports_schemas(Dialect.POSTGRESQL) is True
 
 
 class TestAutocommitConnection:
@@ -211,7 +211,7 @@ class TestEnsureSchemaSqlite:
     @pytest.fixture
     def sqlite_engine(self):
         cfg = StackConfig.for_session(
-            connections={"db": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+            connections={"db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
         )
         eng = Resolver(cfg).resolve_connection("db").create_engine()
         try:
@@ -302,12 +302,12 @@ class TestReservedSchemas:
 
 class TestSystemSchemasFor:
     def test_postgres_excludes_its_catalogs(self):
-        schemas = _system_schemas_for("postgresql")
+        schemas = _system_schemas_for(Dialect.POSTGRESQL)
         assert "information_schema" in schemas
         assert "pg_catalog" in schemas
 
     def test_unknown_dialect_is_empty(self):
-        assert _system_schemas_for("sqlite") == frozenset()
+        assert _system_schemas_for(Dialect.SQLITE) == frozenset()
         assert _system_schemas_for("not_a_real_dialect") == frozenset()
 
 

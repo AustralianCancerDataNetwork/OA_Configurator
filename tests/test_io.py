@@ -25,13 +25,14 @@ from oa_configurator import (
 )
 from oa_configurator.io import ConfigSaveError, save_stack_config, write_env_file
 from oa_configurator.loader import _load_from_path
+from oa_configurator.domains.resources.sql import Dialect
 
 
 def _make_cdm_stack() -> StackConfig:
     return StackConfig.for_session(
         connections={
             "cdm": ConnectionConfig(
-                dialect="postgresql+psycopg",
+                dialect=Dialect.POSTGRESQL + "+psycopg",
                 host="db.example.com",
                 port=5432,
                 user="omop_user",
@@ -76,7 +77,7 @@ class TestWriteEnvFile:
         write_env_file(Resolver(_make_cdm_stack()), path=out)
         content = out.read_text()
         assert "DEFAULT_DB_URL=" in content
-        assert "postgresql" in content
+        assert Dialect.POSTGRESQL in content
 
     def test_no_omop_emb_lines_when_database_absent(self, tmp_path):
         out = tmp_path / "config.env"
@@ -87,7 +88,7 @@ class TestWriteEnvFile:
         cfg = StackConfig.for_session(
             connections={
                 "cdm": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="cdm.host",
                     port=5432,
                     user="u",
@@ -95,7 +96,7 @@ class TestWriteEnvFile:
                     database_name="cdm",
                 ),
                 "emb": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="emb.host",
                     port=5433,
                     user="eu",
@@ -120,7 +121,7 @@ class TestWriteEnvFile:
     def test_tool_extra_scalars_exported(self, tmp_path):
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={
                 "default": CDMDatabaseConfig(connection="db")
@@ -150,7 +151,7 @@ class TestSaveStackConfig:
     def test_creates_file(self, tmp_path):
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={
                 "default": CDMDatabaseConfig(connection="db")
@@ -164,7 +165,7 @@ class TestSaveStackConfig:
         cfg = StackConfig.for_session(
             connections={
                 "cdm": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="localhost",
                     port=5432,
                     user="omop",
@@ -209,7 +210,7 @@ class TestSaveStackConfig:
 
     def test_none_values_stripped(self, tmp_path):
         cfg = StackConfig.for_session(
-            connections={"db": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+            connections={"db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
             databases={
                 "default": CDMDatabaseConfig(connection="db")
             },
@@ -542,7 +543,7 @@ class TestSaveStackConfig:
         cfg = StackConfig.for_session(
             connections={
                 "primary": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="db.example.com",
                     user="omop",
                     password="connection-secret",

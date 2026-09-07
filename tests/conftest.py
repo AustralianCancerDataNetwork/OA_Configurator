@@ -18,8 +18,9 @@ from oa_configurator import (
 )
 from oa_configurator.config import OAConfiguratorConfig
 from oa_configurator.testing import DIALECT_PARAMS, isolated_test_database
+from oa_configurator.domains.resources.sql import Dialect
 
-_FIELD_BY_DIALECT = {"postgresql": "test_db_pg", "sqlite": "test_db_sqlite"}
+_FIELD_BY_DIALECT = {Dialect.POSTGRESQL: "test_db_pg", Dialect.SQLITE: "test_db_sqlite"}
 
 
 @pytest.fixture
@@ -65,7 +66,7 @@ def probe_table(request):
         OAConfiguratorConfig, _FIELD_BY_DIALECT[request.param], dialect=request.param, request=request
     ) as db:
         conn = db.connection
-        if request.param == "sqlite":
+        if request.param == Dialect.SQLITE:
             other_path = db.connection.engine.url.database
             conn.execute(sa.text(f"ATTACH DATABASE '{other_path}_other' AS other_schema"))
             conn.execute(sa.text(f"CREATE TABLE other_schema.{table_name} (id INTEGER)"))
@@ -74,7 +75,7 @@ def probe_table(request):
             )
             conn.commit()
             yield conn, "other_schema", table_name
-        elif request.param == "postgresql":
+        elif request.param == Dialect.POSTGRESQL:
             schema = f"test_{uuid.uuid4().hex[:8]}"
             conn.execute(sa.text(f'CREATE SCHEMA "{schema}"'))
             conn.execute(sa.text(f'CREATE TABLE "{schema}"."{table_name}" (id INTEGER)'))
@@ -92,7 +93,7 @@ def minimal_stack() -> StackConfig:
     return StackConfig.for_session(
         connections={
             "db": ConnectionConfig(
-                dialect="sqlite",
+                dialect=Dialect.SQLITE,
                 database_name=":memory:",
             )
         },
@@ -108,7 +109,7 @@ def pg_stack() -> StackConfig:
     return StackConfig.for_session(
         connections={
             "cdm": ConnectionConfig(
-                dialect="postgresql+psycopg",
+                dialect=Dialect.POSTGRESQL+"+psycopg",
                 host="localhost",
                 port=5432,
                 user="omop",

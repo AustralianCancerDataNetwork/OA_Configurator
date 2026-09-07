@@ -25,6 +25,7 @@ from oa_configurator.io import save_stack_config as _real_save_stack_config
 from oa_configurator.loader import _load_from_path
 from oa_configurator.package_base import PackageConfigBase
 from oa_configurator.resolver import _resolve_ref
+from oa_configurator.domains.resources.sql import Dialect
 
 runner = CliRunner()
 
@@ -96,7 +97,7 @@ class TestConnectionsAdd:
         )
         assert result.exit_code == 0, result.output
         config = _load_from_path(isolated_config)
-        assert config.connections["cdm"].dialect == "sqlite"
+        assert config.connections["cdm"].dialect == Dialect.SQLITE
         assert config.connections["cdm"].database_name == ":memory:"
 
     def test_save_failure_is_rendered_without_traceback(
@@ -138,7 +139,7 @@ class TestConnectionsAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+                connections={"cdm": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -146,7 +147,7 @@ class TestConnectionsAdd:
         )
         assert result.exit_code == 0, result.output
         config = _load_from_path(isolated_config)
-        assert config.connections["cdm"].dialect == "sqlite"
+        assert config.connections["cdm"].dialect == Dialect.SQLITE
         assert config.connections["cdm"].host == "otherhost"
 
     def test_test_only_flag_sets_bool_field(self, isolated_config):
@@ -199,20 +200,20 @@ class TestConnectionsList:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+                connections={"cdm": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
             ),
         )
         result = runner.invoke(cli.app, ["connections", "list"])
         assert result.exit_code == 0
         assert "cdm" in result.output
-        assert "sqlite" in result.output
+        assert Dialect.SQLITE in result.output
 
     def test_password_is_masked(self, isolated_config):
         """A listing shows that a secret is set, never what it is."""
         stack = StackConfig.for_session(
             connections={
                 "cdm": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL+"+psycopg",
                     host="db.hospital.org",
                     user="omop",
                     password=_CANARY,
@@ -233,7 +234,7 @@ class TestConnectionsList:
             StackConfig.for_session(
                 connections={
                     "test_cdm": ConnectionConfig(
-                        dialect="sqlite", database_name=":memory:", test_only=True
+                        dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                     )
                 },
             ),
@@ -251,7 +252,7 @@ class TestDatabasesAdd:
             StackConfig.for_session(
                 connections={
                     "cdm": ConnectionConfig(
-                        dialect="postgresql+psycopg", host="localhost", database_name="cdm"
+                        dialect=Dialect.POSTGRESQL + "+psycopg", host="localhost", database_name="cdm"
                     )
                 }
             ),
@@ -279,7 +280,7 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+                connections={"emb": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -295,7 +296,7 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+                connections={"cdm": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -333,7 +334,7 @@ class TestDatabasesAdd:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "c": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"emb_db": GenericDatabaseConfig(connection="c")},
                 vector_stores={
@@ -354,7 +355,7 @@ class TestDatabasesAdd:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "c": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"emb_db": GenericDatabaseConfig(connection="c")},
             ),
@@ -376,7 +377,7 @@ class TestDatabasesAdd:
         _seed(
             isolated_config,
             StackConfig.for_session(
-                connections={"emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+                connections={"emb": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
             ),
         )
         result = runner.invoke(
@@ -412,7 +413,7 @@ class TestDatabasesList:
             StackConfig.for_session(
                 connections={
                     "cdm": ConnectionConfig(
-                        dialect="postgresql+psycopg", host="localhost", database_name="cdm"
+                        dialect=Dialect.POSTGRESQL + "+psycopg", host="localhost", database_name="cdm"
                     )
                 },
                 databases={
@@ -438,9 +439,9 @@ class TestDatabasesList:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
-                    "vocab": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
-                    "emb": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
+                    "cdm": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:"),
+                    "vocab": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:"),
+                    "emb": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:"),
                 },
                 databases={
                     "cdm_db": CDMDatabaseConfig(connection="cdm", vocab_connection="vocab"),
@@ -759,7 +760,7 @@ class TestResolveRef:
         monkeypatch.setattr(cli.typer, "prompt", lambda *a, **k: "prod_db")
         config = StackConfig.for_session(
             connections={
-                "prod": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "prod": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"prod_db": CDMDatabaseConfig(connection="prod")},
         )
@@ -784,7 +785,7 @@ class TestResolveRef:
         config = StackConfig.for_session(
             connections={
                 "test_conn": ConnectionConfig(
-                    dialect="sqlite", database_name=":memory:", test_only=True
+                    dialect=Dialect.SQLITE, database_name=":memory:", test_only=True
                 )
             },
             databases={"test_db": CDMDatabaseConfig(connection="test_conn")},
@@ -839,7 +840,7 @@ class TestRunConfigurePackage:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"cdm_db": CDMDatabaseConfig(connection="db")},
             ),
@@ -860,7 +861,7 @@ class TestRunConfigurePackage:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"cdm_db": CDMDatabaseConfig(connection="db")},
             ),
@@ -1011,7 +1012,7 @@ class TestRunConfigurePackage:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"cdm_db": CDMDatabaseConfig(connection="db")},
             ),
@@ -1044,7 +1045,7 @@ class TestRunConfigurePackage:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "db": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"cdm_db": CDMDatabaseConfig(connection="db")},
             ),
@@ -1084,7 +1085,7 @@ class TestRunConfigurePackage:
                 "backend": "custom",
                 "cdm_db": {
                     "connection": {
-                        "dialect": "sqlite",
+                        "dialect": Dialect.SQLITE,
                         "database_name": ":memory:",
                     },
                 },
@@ -1096,7 +1097,7 @@ class TestRunConfigurePackage:
         cdm_db_name = config.tools["demo_tool"]["cdm_db"]
         assert cdm_db_name in config.databases
         conn_name = config.databases[cdm_db_name].connection
-        assert config.connections[conn_name].dialect == "sqlite"
+        assert config.connections[conn_name].dialect == Dialect.SQLITE
         assert config.databases[cdm_db_name].schema_name is None
 
     def test_non_interactive_one_shot_missing_required_nested_field_fails(
@@ -1117,12 +1118,12 @@ class TestParseSetFlags:
 
     def test_nested_key(self):
         assert cli._parse_set_flags(("cdm_db.dialect=sqlite", "cdm_db.host=db")) == {
-            "cdm_db": {"dialect": "sqlite", "host": "db"}
+            "cdm_db": {"dialect": Dialect.SQLITE, "host": "db"}
         }
 
     def test_deeply_nested_key(self):
         assert cli._parse_set_flags(("cdm_db.connection.dialect=sqlite",)) == {
-            "cdm_db": {"connection": {"dialect": "sqlite"}}
+            "cdm_db": {"connection": {"dialect": Dialect.SQLITE}}
         }
 
     def test_missing_equals_raises(self):
@@ -1172,7 +1173,7 @@ class TestConfigureSetFlag:
         cdm_db_name = config.tools["demo_tool"]["cdm_db"]
         assert cdm_db_name in config.databases
         conn_name = config.databases[cdm_db_name].connection
-        assert config.connections[conn_name].dialect == "sqlite"
+        assert config.connections[conn_name].dialect == Dialect.SQLITE
 
     def test_set_flag_clashing_with_same_field_flag_fails(
         self, isolated_config, monkeypatch
@@ -1185,7 +1186,7 @@ class TestConfigureSetFlag:
             StackConfig.for_session(
                 connections={
                     "prod": ConnectionConfig(
-                        dialect="postgresql+psycopg", host="localhost", database_name="prod"
+                        dialect=Dialect.POSTGRESQL + "+psycopg", host="localhost", database_name="prod"
                     )
                 },
                 databases={
@@ -1299,7 +1300,7 @@ class TestVectorStoresAdd:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "emb": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"emb_db": GenericDatabaseConfig(connection="emb")},
             ),
@@ -1349,7 +1350,7 @@ class TestVectorStoresAdd:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "emb": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"emb_db": GenericDatabaseConfig(connection="emb")},
                 vector_stores={
@@ -1382,7 +1383,7 @@ class TestVectorStoresList:
             isolated_config,
             StackConfig.for_session(
                 connections={
-                    "emb": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                    "emb": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
                 },
                 databases={"emb_db": GenericDatabaseConfig(connection="emb")},
                 vector_stores={
@@ -1405,18 +1406,18 @@ class TestCleanupTestDatabases:
             StackConfig.for_session(
                 connections={
                     "prod": ConnectionConfig(
-                        dialect="postgresql+psycopg",
+                        dialect=Dialect.POSTGRESQL + "+psycopg",
                         host="db",
                         database_name="prod",
                     ),
                     "test": ConnectionConfig(
-                        dialect="postgresql+psycopg",
+                        dialect=Dialect.POSTGRESQL + "+psycopg",
                         host="db",
                         database_name="test_db",
                         test_only=True,
                     ),
                     "sqlite_test": ConnectionConfig(
-                        dialect="sqlite",
+                        dialect=Dialect.SQLITE,
                         database_name=":memory:",
                         test_only=True,
                     ),
@@ -1440,7 +1441,7 @@ class TestCleanupTestDatabases:
             StackConfig.for_session(
                 connections={
                     "test": ConnectionConfig(
-                        dialect="postgresql+psycopg",
+                        dialect=Dialect.POSTGRESQL + "+psycopg",
                         host="db",
                         database_name="test_db",
                         test_only=True,

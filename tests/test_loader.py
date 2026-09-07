@@ -19,6 +19,7 @@ from oa_configurator.loader import (
     _resolve_config_path,
     invalidate_cache,
 )
+from oa_configurator.domains.resources.sql import Dialect
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +36,7 @@ def _make_config_file(tmp_path: Path, **connection_kwargs) -> Path:
     path = tmp_path / "config.toml"
     save_stack_config(
         StackConfig.for_session(
-            connections={"cdm": ConnectionConfig(dialect="sqlite", **connection_kwargs)},
+            connections={"cdm": ConnectionConfig(dialect=Dialect.SQLITE, **connection_kwargs)},
         ),
         path=path,
     )
@@ -100,7 +101,7 @@ class TestLoadFromPath:
     def test_loads_valid_config(self, tmp_path):
         path = _make_config_file(tmp_path)
         config = _load_from_path(path)
-        assert config.connections["cdm"].dialect == "sqlite"
+        assert config.connections["cdm"].dialect == Dialect.SQLITE
 
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
@@ -165,21 +166,21 @@ class TestLoadFromPathCaching:
 
         second = _load_from_path(path)
 
-        assert second.connections["cdm"].dialect == "sqlite"
+        assert second.connections["cdm"].dialect == Dialect.SQLITE
 
     def test_content_change_invalidates_cache(self, tmp_path):
         path = _make_config_file(tmp_path)
         first = _load_from_path(path)
-        assert first.connections["cdm"].dialect == "sqlite"
+        assert first.connections["cdm"].dialect == Dialect.SQLITE
 
         save_stack_config(
             StackConfig.for_session(
-                connections={"cdm": ConnectionConfig(dialect="postgresql+psycopg", host="db")},
+                connections={"cdm": ConnectionConfig(dialect=Dialect.POSTGRESQL+"+psycopg", host="db")},
             ),
             path=path,
         )
         second = _load_from_path(path)
-        assert second.connections["cdm"].dialect == "postgresql+psycopg"
+        assert second.connections["cdm"].dialect == Dialect.POSTGRESQL+"+psycopg"
 
     def test_invalidate_cache_forces_reparse_even_without_content_change(self, tmp_path, monkeypatch):
         path = _make_config_file(tmp_path)
@@ -208,7 +209,7 @@ class TestConfigCache:
         path.write_text("")
         st = path.stat()
         original = StackConfig.for_session(
-            connections={"cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:")}
+            connections={"cdm": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")}
         )
 
         _ConfigCache.put(path, st, original)

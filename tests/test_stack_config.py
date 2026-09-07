@@ -15,13 +15,14 @@ from oa_configurator import (
     ModelConfig,
     ProviderConfig,
     StackConfig,
+    Dialect
 )
 from oa_configurator.stack_config import mismatched_kind_refs
 
 
 class TestConnectionConfig:
     def test_sqlite_build_url(self):
-        db = ConnectionConfig(dialect="sqlite", database_name=":memory:")
+        db = ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
         assert db.build_url() == "sqlite:///:memory:"
 
     def test_sqlite_without_database_name_raises(self):
@@ -29,11 +30,11 @@ class TestConnectionConfig:
         sqlite dialect would otherwise silently discard data on every
         restart, with no indication anything was ever in-memory."""
         with pytest.raises(ValueError, match="database_name"):
-            ConnectionConfig(dialect="sqlite")
+            ConnectionConfig(dialect=Dialect.SQLITE)
 
     def test_pg_build_url_includes_password(self):
         db = ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="localhost",
             port=5432,
             user="admin",
@@ -47,7 +48,7 @@ class TestConnectionConfig:
 
     def test_pg_safe_url_redacts_password(self):
         db = ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="localhost",
             user="admin",
             password="s3cret",
@@ -63,7 +64,7 @@ class TestConnectionConfig:
 
     def test_extra_fields_forbidden(self):
         with pytest.raises(Exception):
-            ConnectionConfig(dialect="sqlite", unknown_field="x")  # type: ignore
+            ConnectionConfig(dialect=Dialect.SQLITE, unknown_field="x")  # type: ignore
 
 
 class TestGenericDatabaseConfig:
@@ -102,13 +103,13 @@ class TestDatabaseKindDiscrimination:
     def test_missing_kind_rejected(self):
         with pytest.raises(Exception, match="kind"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={"r": {"connection": "c"}},  # ty: ignore[invalid-argument-type]
             )
 
     def test_raw_dict_dispatches_by_kind(self):
         cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+            connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
             databases=cast(
                 Any,
                 {
@@ -123,7 +124,7 @@ class TestDatabaseKindDiscrimination:
     def test_unknown_kind_rejected(self):
         with pytest.raises(Exception):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={"r": {"kind": "bogus", "connection": "c"}},  # ty: ignore[invalid-argument-type]
             )
 
@@ -135,7 +136,7 @@ class TestMismatchedKindRefs:
 
     def test_flags_wrong_subtype(self):
         cfg = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+            connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
             databases={"g": GenericDatabaseConfig(connection="c")},
         )
         from oa_configurator.domains.vector_stores.schema import VectorStoreConfig
@@ -144,7 +145,7 @@ class TestMismatchedKindRefs:
         assert mismatched_kind_refs(vs, cfg) == []
 
         cfg2 = StackConfig.for_session(
-            connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+            connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
             databases={"d": CDMDatabaseConfig(connection="c")},
         )
         vs2 = VectorStoreConfig(backend_type="pgvector", database="d")
@@ -172,7 +173,7 @@ class TestStackConfig:
         """Raw, TOML-table-shaped dicts (not DatabaseConfig instances) still coerce at validation time."""
         cfg = StackConfig.for_session(
             connections={
-                "c": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"r": {"connection": "c", "kind": "cdm"}},  # ty: ignore[invalid-argument-type]
         )
@@ -191,7 +192,7 @@ class TestStackConfig:
     def test_cross_ref_validation_vocab_connection(self):
         with pytest.raises(ValueError, match="unknown connection"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={
                     "r": CDMDatabaseConfig(connection="c", vocab_connection="missing")
                 },

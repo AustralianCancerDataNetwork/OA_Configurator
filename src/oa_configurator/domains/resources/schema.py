@@ -13,7 +13,13 @@ from sqlalchemy.engine import URL, Engine
 import sqlalchemy as sa
 
 from ...refs import RefTo, Secret
-from .sql import SCHEMA_TRANSLATE_MAP_KEY, Role, reject_reserved_schema, supports_schemas
+from .sql import (
+    SCHEMA_TRANSLATE_MAP_KEY, 
+    Role, 
+    reject_reserved_schema, 
+    supports_schemas,
+    Dialect
+)
 
 if TYPE_CHECKING:
     from ...stack_config import StackConfig
@@ -75,7 +81,7 @@ class ConnectionConfig(BaseModel):
         attribute mutation re-runs this validator on a non-frozen model
         with no validate_assignment.
         """
-        if self.dialect.startswith("sqlite"):
+        if self.dialect.startswith(Dialect.SQLITE):
             if not self.database_name:
                 raise ValueError(
                     "ConnectionConfig has no `database_name` set for a sqlite dialect and no"
@@ -108,7 +114,7 @@ class ConnectionConfig(BaseModel):
     def _build_url_obj(self) -> URL:
         # Also enforced at construction time by _check_required_fields; kept
         # here as defense-in-depth for a post-construction mutated instance.
-        if self.dialect.startswith("sqlite"):
+        if self.dialect.startswith(Dialect.SQLITE):
             if not self.database_name:
                 raise ValueError(
                     "ConnectionConfig has no `database_name` set for a sqlite dialect and no"

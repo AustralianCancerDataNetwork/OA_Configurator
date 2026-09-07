@@ -24,6 +24,7 @@ from oa_configurator import (
     StackConfig,
     VectorStoreConfig,
     register_reserved_schema,
+    Dialect
 )
 from oa_configurator.resolver import _check_test_collision
 
@@ -49,8 +50,8 @@ class TestResolveConnection:
             r.resolve_connection("does_not_exist")
 
     def test_dialect_name_needs_no_engine(self, minimal_stack, pg_stack):
-        assert Resolver(minimal_stack).resolve_connection("db").dialect_name == "sqlite"
-        assert Resolver(pg_stack).resolve_connection("cdm").dialect_name == "postgresql"
+        assert Resolver(minimal_stack).resolve_connection("db").dialect_name == Dialect.SQLITE
+        assert Resolver(pg_stack).resolve_connection("cdm").dialect_name == Dialect.POSTGRESQL
 
     def test_sqlite_path_with_reserved_characters_connects_to_the_right_file(
         self, tmp_path
@@ -61,7 +62,7 @@ class TestResolveConnection:
         db_path = tmp_path / "emb?x=1#frag.db"
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=str(db_path))
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=str(db_path))
             }
         )
         target = Resolver(cfg).resolve_connection("db")
@@ -78,7 +79,7 @@ class TestResolveConnection:
         db_path = tmp_path / "emb?x=1#frag.db"
         cfg = StackConfig.for_session(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name=str(db_path))
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=str(db_path))
             }
         )
         target = Resolver(cfg).resolve_connection("db")
@@ -99,7 +100,7 @@ class TestResolveDatabase:
         cfg = StackConfig.for_session(
             connections={
                 "c": ConnectionConfig(
-                    dialect="postgresql+psycopg", host="localhost", database_name="c"
+                    dialect=Dialect.POSTGRESQL+"+psycopg", host="localhost", database_name="c"
                 )
             },
             databases={
@@ -121,8 +122,8 @@ class TestResolveDatabase:
     def test_vocab_connection_separate(self):
         cfg = StackConfig.for_session(
             connections={
-                "cdm": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
-                "vocab": ConnectionConfig(dialect="sqlite", database_name=":memory:"),
+                "cdm": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:"),
+                "vocab": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:"),
             },
             databases={
                 "default": CDMDatabaseConfig(connection="cdm", vocab_connection="vocab"),
@@ -304,7 +305,7 @@ class TestResolveVectorStore:
         cfg = StackConfig.for_session(
             connections={
                 "db": ConnectionConfig(
-                    dialect="postgresql+psycopg", host="localhost", database_name="db"
+                    dialect=Dialect.POSTGRESQL + "+psycopg", host="localhost", database_name="db"
                 )
             },
             databases={
@@ -325,7 +326,7 @@ class TestResolveVectorStore:
         dialect='sqlite'. No separate sqlite_path field, same shape as pgvector."""
         cfg = StackConfig.for_session(
             connections={
-                "f": ConnectionConfig(dialect="sqlite", database_name="/data/emb.db")
+                "f": ConnectionConfig(dialect=Dialect.SQLITE, database_name="/data/emb.db")
             },
             databases={"emb": GenericDatabaseConfig(connection="f")},
             vector_stores={
@@ -344,7 +345,7 @@ class TestResolveVectorStore:
     def test_configuration_passthrough(self):
         cfg = StackConfig.for_session(
             connections={
-                "f": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "f": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"emb": GenericDatabaseConfig(connection="f")},
             vector_stores={
@@ -362,7 +363,7 @@ class TestResolveVectorStore:
     def test_faiss_cache_dir_passthrough(self):
         cfg = StackConfig.for_session(
             connections={
-                "f": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "f": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"emb": GenericDatabaseConfig(connection="f")},
             vector_stores={
@@ -380,7 +381,7 @@ class TestResolveVectorStore:
     def test_faiss_cache_dir_defaults_to_none(self):
         cfg = StackConfig.for_session(
             connections={
-                "f": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "f": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"emb": GenericDatabaseConfig(connection="f")},
             vector_stores={
@@ -416,7 +417,7 @@ class TestResolveVectorStore:
         cfg_databases = {"cdm_db": CDMDatabaseConfig(connection="c")}
         with pytest.raises(ValueError, match="GenericDatabaseConfig"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases=cfg_databases,
                 vector_stores={
                     "vs": VectorStoreConfig(backend_type="pgvector", database="cdm_db")
@@ -437,7 +438,7 @@ def pg_stack_defaults() -> StackConfig:
     return StackConfig.for_session(
         connections={
             "cdm": ConnectionConfig(
-                dialect="postgresql+psycopg",
+                dialect=Dialect.POSTGRESQL+"+psycopg",
                 host="localhost",
                 port=5432,
                 user="omop",
@@ -490,7 +491,7 @@ class TestSchemaTranslateMap:
 class TestResolveTool:
     def test_tool_extra_dict(self):
         cfg = StackConfig.for_session(
-            connections={"db": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+            connections={"db": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
             databases={"default": CDMDatabaseConfig(connection="db")},
             tools={"omop_emb": {"backend": "sqlitevec", "path": "/data"}},
         )
@@ -510,13 +511,13 @@ class TestCreateEngine:
         r = Resolver(minimal_stack)
         target = r.resolve_connection("db")
         engine = target.create_engine()
-        assert engine.dialect.name == "sqlite"
+        assert engine.dialect.name == Dialect.SQLITE
 
     def test_database_create_engine(self, minimal_stack):
         r = Resolver(minimal_stack)
         res = r.resolve_database("default")
         engine = res.create_engine()
-        assert engine.dialect.name == "sqlite"
+        assert engine.dialect.name == Dialect.SQLITE
 
     def test_generic_database_rejects_resolver_schema_override(self, minimal_stack):
         resolved = Resolver(minimal_stack).resolve_database("default")
@@ -551,7 +552,7 @@ class TestReservedSchemaCollision:
         reserved = self._reserved_name()
         with pytest.raises(ValidationError, match=f"{reserved!r}.*test-owner"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={"default": GenericDatabaseConfig(connection="c", schema_name=reserved)},
             )
 
@@ -559,13 +560,13 @@ class TestReservedSchemaCollision:
         reserved = self._reserved_name()
         with pytest.raises(ValidationError, match=f"{reserved!r}.*test-owner"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={"default": CDMDatabaseConfig(connection="c", schema_name=reserved)},
             )
 
     def _pg_connection(self) -> ConnectionConfig:
         return ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="localhost",
             port=5432,
             user="omop",
@@ -636,7 +637,7 @@ class TestCdmSchemaDialectValidation:
     def test_raises_on_vocab_schema_against_sqlite(self):
         with pytest.raises(ValidationError, match="vocab_schema.*no schema concept"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={
                     "default": CDMDatabaseConfig(connection="c", vocab_schema="vocab")
                 },
@@ -645,7 +646,7 @@ class TestCdmSchemaDialectValidation:
     def test_raises_on_results_schema_against_sqlite(self):
         with pytest.raises(ValidationError, match="results_schema.*no schema concept"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={
                     "default": CDMDatabaseConfig(connection="c", results_schema="results")
                 },
@@ -657,7 +658,7 @@ class TestCdmSchemaDialectValidation:
         exemption."""
         with pytest.raises(ValidationError, match="schema_name.*no schema concept"):
             StackConfig.for_session(
-                connections={"c": ConnectionConfig(dialect="sqlite", database_name=":memory:")},
+                connections={"c": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")},
                 databases={
                     "default": CDMDatabaseConfig(connection="c", schema_name="omop")
                 },
@@ -692,7 +693,7 @@ class TestWithOverrides:
         r = Resolver(minimal_stack)
         r2 = r.with_overrides(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name="/other.db")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name="/other.db")
             }
         )
         assert r2.resolve_connection("db").url == "sqlite:////other.db"
@@ -701,7 +702,7 @@ class TestWithOverrides:
         r = Resolver(minimal_stack)
         r.with_overrides(
             connections={
-                "db": ConnectionConfig(dialect="sqlite", database_name="/other.db")
+                "db": ConnectionConfig(dialect=Dialect.SQLITE, database_name="/other.db")
             }
         )
         assert r.resolve_connection("db").url == "sqlite:///:memory:"
@@ -728,7 +729,7 @@ class TestDiscovery:
     def test_vector_store_names(self):
         cfg = StackConfig.for_session(
             connections={
-                "f": ConnectionConfig(dialect="sqlite", database_name=":memory:")
+                "f": ConnectionConfig(dialect=Dialect.SQLITE, database_name=":memory:")
             },
             databases={"emb": GenericDatabaseConfig(connection="f")},
             vector_stores={
@@ -749,13 +750,13 @@ class TestCheckTestCollision:
         cfg = StackConfig.for_session(
             connections={
                 "prod": ConnectionConfig(
-                    dialect="postgresql+psycopg", host="h", port=5432, database_name="d"
+                    dialect=Dialect.POSTGRESQL + "+psycopg", host="h", port=5432, database_name="d"
                 )
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="prod")},
         )
         new_conn = ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="h",
             port=5432,
             database_name="d",
@@ -771,13 +772,13 @@ class TestCheckTestCollision:
         cfg = StackConfig.for_session(
             connections={
                 "primary": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="h",
                     port=5432,
                     database_name="primary_db",
                 ),
                 "vocab_prod": ConnectionConfig(
-                    dialect="postgresql+psycopg",
+                    dialect=Dialect.POSTGRESQL + "+psycopg",
                     host="vocab-h",
                     port=5432,
                     database_name="vocab_db",
@@ -790,7 +791,7 @@ class TestCheckTestCollision:
             },
         )
         new_conn = ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="vocab-h",
             port=5432,
             database_name="vocab_db",
@@ -806,12 +807,12 @@ class TestCheckTestCollision:
         cfg = StackConfig.for_session(
             connections={
                 "orphan_prod": ConnectionConfig(
-                    dialect="postgresql+psycopg", host="h", port=5432, database_name="d"
+                    dialect=Dialect.POSTGRESQL + "+psycopg", host="h", port=5432, database_name="d"
                 )
             },
         )
         new_conn = ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="h",
             port=5432,
             database_name="d",
@@ -824,13 +825,13 @@ class TestCheckTestCollision:
         cfg = StackConfig.for_session(
             connections={
                 "prod": ConnectionConfig(
-                    dialect="postgresql+psycopg", host="h", port=5432, database_name="d"
+                    dialect=Dialect.POSTGRESQL + "+psycopg", host="h", port=5432, database_name="d"
                 )
             },
             databases={"cdm_db": CDMDatabaseConfig(connection="prod")},
         )
         new_conn = ConnectionConfig(
-            dialect="postgresql+psycopg",
+            dialect=Dialect.POSTGRESQL + "+psycopg",
             host="other-h",
             port=5432,
             database_name="d",

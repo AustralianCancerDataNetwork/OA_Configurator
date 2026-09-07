@@ -19,7 +19,7 @@ isolation, SQLite gets a fresh disposable database per call. Pass
     @pytest.fixture
     def empty_engine():
         with isolated_test_database(
-            OmopAlchemyConfig, "test_cdm_db_sqlite", dialect="sqlite",
+            OmopAlchemyConfig, "test_cdm_db_sqlite", dialect=Dialect.SQLITE,
         ) as db:
             yield db.connection.engine
 
@@ -213,7 +213,7 @@ def isolated_test_database(
     config_cls: type["PackageConfigBase"],
     field_name: str,
     *,
-    dialect: str | None = None,
+    dialect: Dialect | str | None = None,
     extensions: Sequence[str] = (),
     request: pytest.FixtureRequest | None = None,
     **engine_kwargs: object,
@@ -225,7 +225,7 @@ def isolated_test_database(
 
     Parameters
     ----------
-    dialect : str, optional
+    dialect : Dialect or str, optional
         Assert the resolved connection is actually this dialect, raising
         if not. A field configured for the wrong dialect is a bug, never
         silently substituted. If *field_name* isn't configured at all and
@@ -253,16 +253,17 @@ def isolated_test_database(
         except TestDatabaseNotConfigured:
             pytest.skip(_skip_message(exc.field_name or field_name))
 
-    dialect_name = sa.engine.make_url(resolved.connection.url).get_backend_name()
-    if dialect is not None and dialect_name != dialect:
+    resolved_dialect_name = sa.engine.make_url(resolved.connection.url).get_backend_name()
+    if dialect is not None and resolved_dialect_name != dialect:
+        expected = dialect.value if isinstance(dialect, Dialect) else dialect
         raise ValueError(
-            f"{field_name!r} resolves to dialect {dialect_name!r}, expected {dialect!r}."
+            f"{field_name!r} resolves to dialect {resolved_dialect_name!r}, expected {expected!r}."
         )
 
     if request is not None:
-        _require_db_dialect_mark(request, field_name, dialect_name)
+        _require_db_dialect_mark(request, field_name, resolved_dialect_name)
 
-    strategy = _strategy_for(dialect_name)
+    strategy = _strategy_for(resolved_dialect_name)
     with strategy.isolated_database(resolved, extensions=extensions, **engine_kwargs) as db:
         yield db
 
