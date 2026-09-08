@@ -107,6 +107,8 @@ embedding_model_name: Annotated[str, RefTo(ModelConfig)] = "embed-default"
 
 `omop-config configure` resolves a `RefTo`-marked field interactively: reuse an existing entry in the target section, or create one on the spot, recursing into any `RefTo` fields the new entry itself has (e.g. a newly-created database recursing into resolving or creating its connection). At load time, `StackConfig` validates that every `RefTo`-marked field resolves to a configured entry, raising a clear error naming the missing section and value otherwise. There is no separate "required"/"owned" declaration list: the field's own type is the declaration, and two packages share an entry simply by both fields resolving to the same name.
 
+Two packages point their own `RefTo`-marked field at the same entry non-interactively by naming it directly, e.g. `omop-config configure <package> --set cdm_db=<existing-name>` — no need to reconfigure the connection or schema a second time.
+
 ---
 
 ## Database/Model resolution
@@ -175,9 +177,26 @@ CDM-specific: `ResolvedCDMDatabase.schema_translate_map()` returns the SQLAlchem
 {None: "omop", "vocab": "omop_vocab", "results": "results"}
 ```
 
-OMOP ORM models (omop-alchemy) carry `schema=None` or `schema="vocab"` on their `__table_args__`. The translate map routes them to the correct schema at runtime without changing model definitions. Its keys correspond to the members of [`Role`](api/resources.md#role), the same enum `ResolvedCDMDatabase.connection_target()`/`create_engine()` accept for their `role` parameter. A generic `ResolvedDatabase` has its own, simpler `create_engine()` with no `role` parameter, since a generic entry only ever has one connection.
+OMOP ORM models (omop-alchemy) carry `schema=None`, `schema="vocab"` or `schema="results"` on their `__table_args__`. The translate map routes them to the correct schema at runtime without changing model definitions. Its keys correspond to the members of [`Role`](api/resources.md#role), the same enum `ResolvedCDMDatabase.connection_target()`/`create_engine()` accept for their `role` parameter. A generic `ResolvedDatabase` has its own, simpler `create_engine()` with no `role` parameter, since a generic entry only ever has one connection.
 
 `create_engine()`'s own `schema_translate_map` is authoritative, not a default: an `execution_options` argument may *extend* the map with a key the resolver doesn't own (e.g. a package's own reserved-schema role, layered on top of the CDM map, see [Vector Stores](api/vector-stores.md) for a real example), but supplying `None`/`"vocab"`/`"results"` there raises `ValueError` rather than silently overriding the configured routing.
+
+---
+
+## Schema provenance guard
+
+`schema_translate_map()` resolves a table's *current* physical schema correctly, but on its own gives no memory of a table's *previous* one. If a role's configured schema changes between two runs (a typo, an incomplete migration, two configs drifting apart), nothing would otherwise stop `create_all()` from silently creating a second, orphaned copy of the tables under the new schema while the old copy sits there unnoticed.
+
+`guard_schema_provenance(connection, resolved, *, role)` (`sql.py`) closes that gap: a context manager wrapping a `create_all()`-style call, recording which physical schema each `(database, role)` pair last resolved to in a small bookkeeping table (`SCHEMA_PROVENANCE_SCHEMA`, its own reserved schema). Entering checks; the write happens only on successful exit, never on an exception:
+
+```python
+with guard_schema_provenance(connection, resolved, role=Role.VOCAB):
+    Base.metadata.create_all(bind=connection, tables=vocab_tables, checkfirst=True)
+```
+
+A resolved schema that disagrees with the recorded one raises `SchemaDriftError` and refuses the DDL. `resolved=None` (a bare-engine caller with no resolved config, e.g. a test) short-circuits to a no-op, as does a `test_only` connection — this only guards genuinely persistent deployments. `find_table_in_other_schemas()` complements it for drift that predates the bookkeeping table entirely, checking the database's actual physical layout rather than a stored claim.
+
+oa-configurator owns the guard and the bookkeeping table; it does not itself expose a way to resolve a genuine migration. That's deliberate — moving real data or accepting a new baseline is a decision each consuming package's own CLI makes explicit (e.g. omop-alchemy's `acknowledge-schema-migration`/`drop-orphan-schema-tables` commands), never something this library does automatically.
 
 ---
 
