@@ -39,7 +39,6 @@ from .io import ConfigSaveError, FLAT_ENV_PATH, save_stack_config, write_env_fil
 from .loader import (
     DEFAULT_CONFIG_PATH,
     load_stack_config,
-    load_stack_config_from_path,
 )
 from .logging_config import (
     LoggingConfig,
@@ -50,8 +49,8 @@ from .logging_config import (
 from .package_base import (
     ConfigurationError,
     PackageConfigBase,
-    PackageConfigValidationError,
-    StackConfigValidationError,
+    PackageConfigInvalidError,
+    StackConfigInvalidError,
     plan_configure,
 )
 from .refs import (
@@ -87,7 +86,7 @@ __all__ = [
     "ModelConfig",
     "RedactingFormatter",
     "PackageConfigBase",
-    "PackageConfigValidationError",
+    "PackageConfigInvalidError",
     "ProviderConfig",
     "RefTo",
     "Resolver",
@@ -108,7 +107,7 @@ __all__ = [
     "Sensitive",
     "SensitiveValueLeak",
     "StackConfig",
-    "StackConfigValidationError",
+    "StackConfigInvalidError",
     "UnknownRefTarget",
     "VectorStoreConfig",
     "assert_no_sensitive_values_leak",
@@ -120,7 +119,6 @@ __all__ = [
     "guard_schema_provenance",
     "is_sensitive",
     "load_stack_config",
-    "load_stack_config_from_path",
     "mismatched_kind_refs",
     "plan_configure",
     "qualified",

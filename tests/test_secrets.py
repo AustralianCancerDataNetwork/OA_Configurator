@@ -31,6 +31,7 @@ from oa_configurator import (
     safe_endpoint,
     save_stack_config,
     write_env_file,
+    DatabaseKind
 )
 from oa_configurator.resolver import Resolver
 
@@ -254,7 +255,7 @@ def _stack() -> StackConfig:
                 password=CANARY, database_name="omop",
             )
         },
-        databases={"cdm": CDMDatabaseConfig(kind="cdm", connection="cdm", vocab_connection="cdm")},
+        databases={"cdm": CDMDatabaseConfig(kind=DatabaseKind.CDM, connection="cdm", vocab_connection="cdm")},
         providers={
             "azure": ProviderConfig(
                 provider="openai", base_url="https://api.example.org/v1", api_key=KEY_CANARY,

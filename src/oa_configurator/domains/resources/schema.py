@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.engine import URL, Engine
 import sqlalchemy as sa
 
-from ...refs import RefTo, Secret
+from ...refs import RefTo, Secret, SecretSafeBaseModel
 from .sql import (
     SCHEMA_TRANSLATE_MAP_KEY, 
     Role, 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from ...stack_config import StackConfig
 
 
-class ConnectionConfig(BaseModel):
+class ConnectionConfig(SecretSafeBaseModel):
     """Complete specification of one physical database connection: server
     address, credentials, and target database.
 

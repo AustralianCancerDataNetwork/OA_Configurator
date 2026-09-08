@@ -17,7 +17,7 @@ from oa_configurator import (
     GenericDatabaseConfig,
     ModelConfig,
     PackageConfigBase,
-    PackageConfigValidationError,
+    PackageConfigInvalidError,
     ProviderConfig,
     RefTo,
     Resolver,
@@ -120,7 +120,7 @@ class TestPackageCandidateValidation:
     def test_scalar_constraint_identifies_package_and_field(self):
         cfg = _validated_stack({"cdm_db": "cdm_db", "port": 999999})
 
-        with pytest.raises(PackageConfigValidationError) as exc_info:
+        with pytest.raises(PackageConfigInvalidError) as exc_info:
             ValidatedPackageConfig.validate_candidate(cfg)
 
         assert exc_info.value.tool_name == "validated_tool"
@@ -130,7 +130,7 @@ class TestPackageCandidateValidation:
     def test_nested_validation_location_is_preserved(self):
         cfg = _validated_stack({"cdm_db": "cdm_db", "limits": {"batch_size": 1000}})
 
-        with pytest.raises(PackageConfigValidationError) as exc_info:
+        with pytest.raises(PackageConfigInvalidError) as exc_info:
             ValidatedPackageConfig.validate_candidate(cfg)
 
         assert exc_info.value.errors()[0]["loc"] == ("limits", "batch_size")
@@ -138,7 +138,7 @@ class TestPackageCandidateValidation:
     def test_cross_field_error_retains_model_location(self):
         cfg = _validated_stack({"cdm_db": "cdm_db", "workers": 8, "max_workers": 4})
 
-        with pytest.raises(PackageConfigValidationError) as exc_info:
+        with pytest.raises(PackageConfigInvalidError) as exc_info:
             ValidatedPackageConfig.validate_candidate(cfg)
 
         assert exc_info.value.errors()[0]["loc"] == ()
@@ -180,7 +180,7 @@ class TestPackageCandidateValidation:
         canary = "secret-canary-value"
         cfg = StackConfig.for_session(tools={"secret_tool": {"api_key": canary}})
 
-        with pytest.raises(PackageConfigValidationError) as exc_info:
+        with pytest.raises(PackageConfigInvalidError) as exc_info:
             SecretPackageConfig.validate_candidate(cfg)
 
         assert canary not in str(exc_info.value)
@@ -329,7 +329,7 @@ class TestPlanConfigure:
         cfg = _validated_stack({"cdm_db": "cdm_db", "port": 8000})
         before = cfg.model_dump(mode="python")
 
-        with pytest.raises(PackageConfigValidationError):
+        with pytest.raises(PackageConfigInvalidError):
             plan_configure(ValidatedPackageConfig, cfg, {"port": 999999})
 
         assert cfg.model_dump(mode="python") == before

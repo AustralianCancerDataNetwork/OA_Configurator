@@ -14,7 +14,7 @@ One section per named physical connection: server address, credentials, target d
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `dialect` | string | **yes** | SQLAlchemy dialect string, e.g. `postgresql+psycopg`, `mssql+pyodbc`, `sqlite` |
+| `dialect` | string | **yes** | SQLAlchemy dialect string, e.g. `postgresql+psycopg`, `sqlite` |
 | `host` | string | for non-SQLite | Hostname or IP. Required for every dialect except SQLite, which connects to a local file and has no host to speak of. |
 | `port` | int | no | Port number |
 | `user` | string | no | Database username |
@@ -24,6 +24,22 @@ One section per named physical connection: server address, credentials, target d
 
 !!! warning "Security note"
     Passwords are stored in plaintext in this file. Restrict permissions with `chmod 600 ~/.config/omop/config.toml`. Secret-management support (env-backed passwords, Vault, etc.) is planned for a future release.
+
+### Supported Dialects
+
+As the project is built on [SQLAlchemy](https://www.sqlalchemy.org/), support is inherently
+limited to dialects [SQLAlchemy itself supports](https://docs.sqlalchemy.org/en/20/dialects/).
+Only two are implemented today:
+
+| SQLAlchemy Dialect | Supported |
+| :----------------- | :-------: |
+| PostgreSQL (9.6+) | :white_check_mark: |
+| SQLite (3.12+) | :white_check_mark: |
+| Microsoft SQL Server (2012+) | :x: |
+| MySQL / MariaDB (5.6+ / 10+) | :x: |
+| Oracle Database (11+) | :x: |
+
+If your dialect isn't supported, lodge a feature request [in the GitHub repo](https://github.com/AustralianCancerDataNetwork/oa-configurator/issues).
 
 ### Example: PostgreSQL
 
