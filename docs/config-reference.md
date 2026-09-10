@@ -14,7 +14,7 @@ One section per named physical connection: server address, credentials, target d
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `dialect` | string | **yes** | SQLAlchemy dialect string, e.g. `postgresql+psycopg`, `mssql+pyodbc`, `sqlite` |
+| `dialect` | string | **yes** | SQLAlchemy dialect string, e.g. `postgresql+psycopg`, `sqlite` |
 | `host` | string | for non-SQLite | Hostname or IP. Required for every dialect except SQLite, which connects to a local file and has no host to speak of. |
 | `port` | int | no | Port number |
 | `user` | string | no | Database username |
@@ -24,6 +24,22 @@ One section per named physical connection: server address, credentials, target d
 
 !!! warning "Security note"
     Passwords are stored in plaintext in this file. Restrict permissions with `chmod 600 ~/.config/omop/config.toml`. Secret-management support (env-backed passwords, Vault, etc.) is planned for a future release.
+
+### Supported Dialects { #supported-dialects }
+
+As the project is built on [SQLAlchemy](https://www.sqlalchemy.org/), support is inherently
+limited to dialects [SQLAlchemy itself supports](https://docs.sqlalchemy.org/en/20/dialects/).
+Only two are implemented today:
+
+| SQLAlchemy Dialect | Supported |
+| :----------------- | :-------: |
+| PostgreSQL (9.6+) | :white_check_mark: |
+| SQLite (3.12+) | :white_check_mark: |
+| Microsoft SQL Server (2012+) | :x: |
+| MySQL / MariaDB (5.6+ / 10+) | :x: |
+| Oracle Database (11+) | :x: |
+
+If your dialect isn't supported, lodge a feature request [in the GitHub repo](https://github.com/AustralianCancerDataNetwork/oa-configurator/issues).
 
 ### Example: PostgreSQL
 
@@ -55,7 +71,7 @@ Every entry declares an explicit `kind`, discriminating which of the fields belo
 |---|---|---|---|---|
 | `kind` | string | **yes** | both | Discriminator. See [DatabaseKind](api/resources.md#databasekind). |
 | `connection` | string | **yes** | both | Connection name (from `[connections.*]`) used as the primary server |
-| `schema_name` | string | no | both | Schema this database's tables live in. Defaults to `"omop"` for the CDM kind only; the generic kind has no default (unset means "use the connection's own default"). |
+| `schema_name` | string | no | both | Schema this database's tables live in. No default on either kind (unset means "use the connection's own default", e.g. Postgres's own `search_path`). Rejected at construction time if set against a connection whose dialect has no real schema concept (e.g. SQLite). |
 | `vocab_connection` | string | no | CDM only | Separate connection if vocabulary lives on a different server. Falls back to `connection`. |
 | `vocab_schema` | string | no | CDM only | Vocabulary schema. Falls back to `schema_name` when not set. |
 | `results_schema` | string | no | CDM only | Achilles / Atlas results schema |
@@ -108,7 +124,7 @@ Which storage backend an embedding-capable package should use. Referenced by a c
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `backend_type` | string | **yes** | Storage backend key, e.g. `sqlitevec`, `pgvector`. A plain string validated by the owning package (e.g. `omop-emb`), not by `oa-configurator` itself. |
+| `backend_type` | string | **yes** | Storage backend key, e.g. `sqlitevec`, `pgvector`. A plain string validated by the owning package, not by `oa-configurator` itself. |
 | `database` | string | **yes** | Name of a `[databases.*]` entry (from `[databases.*]`), which must have `kind = "generic"` |
 | `faiss_cache_dir` | string | no | Directory to cache FAISS index files, if the consuming package uses one |
 | `configuration` | table | `{}` | Free-form per-store knobs with no dedicated field, passed through verbatim |
