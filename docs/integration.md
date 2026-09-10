@@ -306,7 +306,7 @@ For switching between whole environments (dev vs. prod) rather than picking one 
 
 ### Cross-package database references
 
-A package that consumes a database owned by another package (e.g. `omop-graph` using `omop-alchemy`'s CDM database) declares its own field with the same `RefTo(CDMDatabaseConfig)` type and the same default name (e.g. `cdm_db: Annotated[str, RefTo(CDMDatabaseConfig)] = "cdm_db"`). There is no typed cross-package pointer: two packages share an entry simply because both fields resolve to the same name. The shared database must be configured once, under that name, for both packages' references to resolve.
+A package that consumes a database owned by another package declares its own field with the same `RefTo(CDMDatabaseConfig)` type and the same default name (e.g. `cdm_db: Annotated[str, RefTo(CDMDatabaseConfig)] = "cdm_db"`). There is no typed cross-package pointer: two packages share an entry simply because both fields resolve to the same name. The shared database must be configured once, under that name, for both packages' references to resolve.
 
 ---
 

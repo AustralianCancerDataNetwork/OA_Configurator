@@ -124,7 +124,7 @@ Which storage backend an embedding-capable package should use. Referenced by a c
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `backend_type` | string | **yes** | Storage backend key, e.g. `sqlitevec`, `pgvector`. A plain string validated by the owning package (e.g. `omop-emb`), not by `oa-configurator` itself. |
+| `backend_type` | string | **yes** | Storage backend key, e.g. `sqlitevec`, `pgvector`. A plain string validated by the owning package, not by `oa-configurator` itself. |
 | `database` | string | **yes** | Name of a `[databases.*]` entry (from `[databases.*]`), which must have `kind = "generic"` |
 | `faiss_cache_dir` | string | no | Directory to cache FAISS index files, if the consuming package uses one |
 | `configuration` | table | `{}` | Free-form per-store knobs with no dedicated field, passed through verbatim |
