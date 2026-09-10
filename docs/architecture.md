@@ -183,7 +183,7 @@ OMOP ORM models (omop-alchemy) carry `schema=None`, `schema="vocab"` or `schema=
 
 ---
 
-## Schema provenance guard
+## Schema provenance guard { #schema-provenance-guard }
 
 `schema_translate_map()` resolves a table's *current* physical schema correctly, but on its own gives no memory of a table's *previous* one. If a role's configured schema changes between two runs (a typo, an incomplete migration, two configs drifting apart), nothing would otherwise stop `create_all()` from silently creating a second, orphaned copy of the tables under the new schema while the old copy sits there unnoticed.
 
