@@ -25,7 +25,7 @@ One section per named physical connection: server address, credentials, target d
 !!! warning "Security note"
     Passwords are stored in plaintext in this file. Restrict permissions with `chmod 600 ~/.config/omop/config.toml`. Secret-management support (env-backed passwords, Vault, etc.) is planned for a future release.
 
-### Supported Dialects
+### Supported Dialects { #supported-dialects }
 
 As the project is built on [SQLAlchemy](https://www.sqlalchemy.org/), support is inherently
 limited to dialects [SQLAlchemy itself supports](https://docs.sqlalchemy.org/en/20/dialects/).
